@@ -15,8 +15,8 @@ import {
   Filter,
   Download,
   Settings,
-  ArrowUp,
-  ArrowDown,
+  ChevronUp,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -57,8 +57,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       pageSize = 10,
       pageSizeOptions = [5, 10, 25, 50, 100],
       checkboxSelection = false,
-      disableSelectionOnClick = false,
-      loading = false,
       onSelectionModelChange,
       onSortModelChange,
       onFilterModelChange,
@@ -71,8 +69,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       hideColumns = false,
       hidePagination = false,
       density = 'standard',
-      disableColumnFilter = false,
-      disableColumnMenu = false,
       hideFilterLabel = false,
       hideExportLabel = false,
       hideColumnsLabel = false,
@@ -1627,13 +1623,13 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                               >
                                 {sortModel.find((s) => s.field === column.field)
                                   ?.sort === 'asc' ? (
-                                  <ArrowUp />
+                                  <ChevronUp />
                                 ) : sortModel.find(
                                     (s) => s.field === column.field
                                   )?.sort === 'desc' ? (
-                                  <ArrowDown />
+                                  <ChevronDown />
                                 ) : (
-                                  <ArrowUp />
+                                  <ChevronUp />
                                 )}
                               </button>
                             </Tooltip>
