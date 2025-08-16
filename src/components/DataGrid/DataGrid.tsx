@@ -1190,13 +1190,13 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
               {/* Search input */}
               <div className="relative mb-4">
                 <Input
+                  startIcon={<Search className="h-4 w-4" />}
                   placeholder="Search columns..."
                   value={columnSearchQuery}
                   onChange={(e) => setColumnSearchQuery(e.target.value)}
                   className=""
                   inputSize="sm"
                   variant="default"
-                  // startIcon={<Search />}
                 />
               </div>
             </div>
@@ -1463,15 +1463,18 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
           <div className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center gap-2">
               {!hideSearch && (
-                <div className="relative">
-                  <Input
-                    placeholder="Search..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-64"
-                    variant="default"
-                    // startIcon={<Search />}
-                  />
+                <div className="relative hidden md:block">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      startIcon={<Search className="h-5 w-5" />}
+                      placeholder="Search..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-64 pl-9"
+                      variant="default"
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -1487,7 +1490,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                       onClick={() => setShowExportPopover(!showExportPopover)}
                     >
                       <Download className="h-4 w-4" />
-                      {!hideExportLabel && <span className="ml-2">Export</span>}
+                      {!hideExportLabel && (
+                        <span className="ml-2 hidden md:inline">Export</span>
+                      )}
                     </Button>
                     <ExportPopoverPortal />
                   </div>
@@ -1505,7 +1510,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                     >
                       <Filter className="h-4 w-4" />
                       {!hideFilterLabel && (
-                        <span className="ml-2">Filters</span>
+                        <span className="ml-2 hidden md:inline">Filters</span>
                       )}
                     </Button>
                     <FilterPopoverPortal />
@@ -1527,7 +1532,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                     >
                       <Settings className="h-4 w-4" />
                       {!hideColumnsLabel && (
-                        <span className="ml-2">Columns</span>
+                        <span className="ml-2 hidden md:inline">Columns</span>
                       )}
                     </Button>
                     <ColumnPopoverPortal />
@@ -1832,8 +1837,8 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
 
         {/* Footer */}
         {!hideFooter && !hidePagination && (
-          <div className="flex items-center justify-between p-4 border-t">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center md:justify-between p-4 border-t">
+            <div className="items-center gap-3 hidden md:flex">
               <span className="text-sm text-gray-500 whitespace-nowrap">
                 Rows per page:
               </span>
@@ -1863,46 +1868,38 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                     )} of ${sortedRows.length}`}
               </span>
               <div className="flex items-center gap-1">
-                <Tooltip content="First page">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(0)}
-                    disabled={page === 0}
-                  >
-                    <ChevronsLeft />
-                  </Button>
-                </Tooltip>
-                <Tooltip content="Previous page">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(page - 1)}
-                    disabled={page === 0}
-                  >
-                    <ChevronLeft />
-                  </Button>
-                </Tooltip>
-                <Tooltip content="Next page">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(page + 1)}
-                    disabled={page >= totalPages - 1}
-                  >
-                    <ChevronRight />
-                  </Button>
-                </Tooltip>
-                <Tooltip content="Last page">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(totalPages - 1)}
-                    disabled={page >= totalPages - 1}
-                  >
-                    <ChevronsRight />
-                  </Button>
-                </Tooltip>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(0)}
+                  disabled={page === 0}
+                >
+                  <ChevronsLeft />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(page - 1)}
+                  disabled={page === 0}
+                >
+                  <ChevronLeft />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(page + 1)}
+                  disabled={page >= totalPages - 1}
+                >
+                  <ChevronRight />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(totalPages - 1)}
+                  disabled={page >= totalPages - 1}
+                >
+                  <ChevronsRight />
+                </Button>
               </div>
             </div>
           </div>
