@@ -1,6 +1,6 @@
 'use client';
 
-import type React from 'react';
+import React, { useMemo } from 'react';
 import { forwardRef, createContext, useContext } from 'react';
 
 export interface FormControlProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -47,9 +47,10 @@ const FormControl = forwardRef<HTMLDivElement, FormControlProps>(
     ref
   ) => {
     // Generate a unique ID for the input that will be used by labels
-    const inputId = `form-control-input-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
+    const inputId = useMemo(
+      () => `form-control-input-${Math.random().toString(36).slice(2, 11)}`,
+      []
+    );
 
     const marginClasses = {
       none: '',

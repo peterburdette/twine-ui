@@ -1,13 +1,12 @@
 'use client';
 
-import React from 'react';
-import { forwardRef, useRef } from 'react';
+import React, { forwardRef, useRef } from 'react';
 import { useFormControl } from '../FormControl/FormControl';
 
 export interface FormControlLabelProps
   extends React.HTMLAttributes<HTMLLabelElement> {
   control: React.ReactElement;
-  label?: React.ReactNode;
+  label?: React.ReactNode | string;
   labelPlacement?: 'end' | 'start' | 'top' | 'bottom';
   disabled?: boolean;
   required?: boolean;
@@ -61,9 +60,7 @@ const FormControlLabel = forwardRef<HTMLLabelElement, FormControlLabelProps>(
       id: controlId,
       ref: controlRef,
       disabled,
-      size,
-      ...(error && { variant: 'error' }),
-      ...control.props, // Allow control's own props to override
+      ...control.props, // Let control override props if needed
     });
 
     const labelElement = label && (
@@ -72,64 +69,6 @@ const FormControlLabel = forwardRef<HTMLLabelElement, FormControlLabelProps>(
         {required && <span className="text-red-500 ml-1">*</span>}
       </span>
     );
-
-    const handleClick = (e: React.MouseEvent<HTMLLabelElement>) => {
-      if (disabled) {
-        e.preventDefault();
-        return;
-      }
-
-      // Prevent double-clicking if the click originated from the control itself
-      if (e.target === controlRef.current) {
-        return;
-      }
-
-      // Call the original onClick if provided
-      onClick?.(e);
-
-      // Handle different control types
-      if (controlRef.current) {
-        const controlType = controlRef.current.type;
-
-        if (controlType === 'checkbox') {
-          // For checkboxes, toggle the checked state
-          const currentChecked = controlRef.current.checked;
-          controlRef.current.checked = !currentChecked;
-
-          // Trigger change event
-          const changeEvent = new Event('change', { bubbles: true });
-          controlRef.current.dispatchEvent(changeEvent);
-
-          // Call onChange handler if it exists
-          if (control.props.onChange) {
-            const syntheticEvent = {
-              target: controlRef.current,
-              currentTarget: controlRef.current,
-            } as React.ChangeEvent<HTMLInputElement>;
-            control.props.onChange(syntheticEvent);
-          }
-        } else if (controlType === 'radio') {
-          // For radio buttons, set checked to true
-          controlRef.current.checked = true;
-
-          // Trigger change event
-          const changeEvent = new Event('change', { bubbles: true });
-          controlRef.current.dispatchEvent(changeEvent);
-
-          // Call onChange handler if it exists
-          if (control.props.onChange) {
-            const syntheticEvent = {
-              target: controlRef.current,
-              currentTarget: controlRef.current,
-            } as React.ChangeEvent<HTMLInputElement>;
-            control.props.onChange(syntheticEvent);
-          }
-        } else {
-          // For other inputs (text, etc.), just focus
-          controlRef.current.focus();
-        }
-      }
-    };
 
     const renderContent = () => {
       switch (labelPlacement) {
@@ -169,7 +108,7 @@ const FormControlLabel = forwardRef<HTMLLabelElement, FormControlLabelProps>(
       <label
         ref={ref}
         className={`${baseClasses} ${disabledClasses} ${className}`}
-        onClick={handleClick}
+        onClick={onClick} // only forward click, don’t override state
         {...props}
       >
         {renderContent()}
