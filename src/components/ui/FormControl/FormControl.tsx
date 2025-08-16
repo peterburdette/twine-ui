@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useMemo } from 'react';
-import { forwardRef, createContext, useContext } from 'react';
+import { forwardRef, createContext, useContext, useMemo } from 'react';
+import { cn } from '../../../lib/utils';
 
 export interface FormControlProps extends React.HTMLAttributes<HTMLDivElement> {
   error?: boolean;
@@ -11,6 +11,7 @@ export interface FormControlProps extends React.HTMLAttributes<HTMLDivElement> {
   margin?: 'none' | 'dense' | 'normal';
   variant?: 'standard' | 'outlined' | 'filled';
   size?: 'sm' | 'md' | 'lg';
+  id?: string; // allow overriding inputId
 }
 
 interface FormControlContextValue {
@@ -42,14 +43,16 @@ const FormControl = forwardRef<HTMLDivElement, FormControlProps>(
       margin = 'normal',
       variant = 'standard',
       size = 'md',
+      id,
       ...props
     },
     ref
   ) => {
-    // Generate a unique ID for the input that will be used by labels
+    // Stable ID for linking <label htmlFor> with inputs
     const inputId = useMemo(
-      () => `form-control-input-${Math.random().toString(36).slice(2, 11)}`,
-      []
+      () =>
+        id ?? `form-control-input-${Math.random().toString(36).slice(2, 11)}`,
+      [id]
     );
 
     const marginClasses = {
@@ -60,7 +63,11 @@ const FormControl = forwardRef<HTMLDivElement, FormControlProps>(
 
     const widthClasses = fullWidth ? 'w-full' : '';
 
-    const formControlClasses = `${marginClasses[margin]} ${widthClasses} ${className}`;
+    const formControlClasses = cn(
+      marginClasses[margin],
+      widthClasses,
+      className
+    );
 
     const contextValue: FormControlContextValue = {
       error,
