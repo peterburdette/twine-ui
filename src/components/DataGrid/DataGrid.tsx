@@ -27,7 +27,6 @@ import {
 import { Input } from '../ui/Input/Input';
 import { Checkbox } from '../ui/Checkbox/Checkbox';
 import { Select } from '../ui/Select/Select';
-import { Tooltip } from '../ui/Tooltip/Tooltip';
 import { Button } from '../ui/Button/Button';
 import { cn } from '../../lib/utils';
 import { GridExportUtils } from '../../utils/gridExport';
@@ -1122,30 +1121,28 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                   </div>
 
                   <div className="flex-shrink-0">
-                    <Tooltip content="Remove filter">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          removeFilterRule(rule.id);
-                          // Apply changes immediately
-                          const updatedRules = tempFilterRules.filter(
-                            (r) => r.id !== rule.id
-                          );
-                          setFilterRules(updatedRules);
-                          const newFilterModel: Record<string, string> = {};
-                          updatedRules.forEach((r) => {
-                            if (r.operator === 'contains' && r.value) {
-                              newFilterModel[r.field] = r.value;
-                            }
-                          });
-                          setFilterModel(newFilterModel);
-                          onFilterModelChange?.(updatedRules);
-                        }}
-                      >
-                        <X />
-                      </Button>
-                    </Tooltip>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        removeFilterRule(rule.id);
+                        // Apply changes immediately
+                        const updatedRules = tempFilterRules.filter(
+                          (r) => r.id !== rule.id
+                        );
+                        setFilterRules(updatedRules);
+                        const newFilterModel: Record<string, string> = {};
+                        updatedRules.forEach((r) => {
+                          if (r.operator === 'contains' && r.value) {
+                            newFilterModel[r.field] = r.value;
+                          }
+                        });
+                        setFilterModel(newFilterModel);
+                        onFilterModelChange?.(updatedRules);
+                      }}
+                    >
+                      <X />
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -1481,63 +1478,57 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
 
             <div className="flex items-center gap-2">
               {!hideExport && (
-                <Tooltip content="Export data">
-                  <div className="relative">
-                    <Button
-                      ref={exportButtonRef}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowExportPopover(!showExportPopover)}
-                    >
-                      <Download className="h-4 w-4" />
-                      {!hideExportLabel && (
-                        <span className="ml-2 hidden md:inline">Export</span>
-                      )}
-                    </Button>
-                    <ExportPopoverPortal />
-                  </div>
-                </Tooltip>
+                <div className="relative">
+                  <Button
+                    ref={exportButtonRef}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowExportPopover(!showExportPopover)}
+                  >
+                    <Download className="h-4 w-4" />
+                    {!hideExportLabel && (
+                      <span className="ml-2 hidden md:inline">Export</span>
+                    )}
+                  </Button>
+                  <ExportPopoverPortal />
+                </div>
               )}
 
               {!hideFilters && (
-                <Tooltip content="Advanced filters">
-                  <div className="relative">
-                    <Button
-                      ref={filterButtonRef}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowFilterPopover(!showFilterPopover)}
-                    >
-                      <Filter className="h-4 w-4" />
-                      {!hideFilterLabel && (
-                        <span className="ml-2 hidden md:inline">Filters</span>
-                      )}
-                    </Button>
-                    <FilterPopoverPortal />
-                  </div>
-                </Tooltip>
+                <div className="relative">
+                  <Button
+                    ref={filterButtonRef}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowFilterPopover(!showFilterPopover)}
+                  >
+                    <Filter className="h-4 w-4" />
+                    {!hideFilterLabel && (
+                      <span className="ml-2 hidden md:inline">Filters</span>
+                    )}
+                  </Button>
+                  <FilterPopoverPortal />
+                </div>
               )}
 
               {!hideColumns && (
-                <Tooltip content="Manage columns">
-                  <div className="relative">
-                    <Button
-                      ref={columnButtonRef}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setTempColumnVisibility({ ...columnVisibility });
-                        setShowColumnPopover(!showColumnPopover);
-                      }}
-                    >
-                      <Settings className="h-4 w-4" />
-                      {!hideColumnsLabel && (
-                        <span className="ml-2 hidden md:inline">Columns</span>
-                      )}
-                    </Button>
-                    <ColumnPopoverPortal />
-                  </div>
-                </Tooltip>
+                <div className="relative">
+                  <Button
+                    ref={columnButtonRef}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setTempColumnVisibility({ ...columnVisibility });
+                      setShowColumnPopover(!showColumnPopover);
+                    }}
+                  >
+                    <Settings className="h-4 w-4" />
+                    {!hideColumnsLabel && (
+                      <span className="ml-2 hidden md:inline">Columns</span>
+                    )}
+                  </Button>
+                  <ColumnPopoverPortal />
+                </div>
               )}
             </div>
           </div>
@@ -1614,30 +1605,26 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                             {column.headerName}
                           </span>
                           {column.sortable !== false && (
-                            <Tooltip content={`Sort by ${column.headerName}`}>
-                              <button
-                                onClick={() => handleSort(column.field)}
-                                className={`ml-1 p-1 hover:bg-gray-200 rounded transition-opacity ${
-                                  hoveredColumn === column.field ||
-                                  sortModel.find(
-                                    (s) => s.field === column.field
-                                  )
-                                    ? 'opacity-100'
-                                    : 'opacity-0'
-                                }`}
-                              >
-                                {sortModel.find((s) => s.field === column.field)
-                                  ?.sort === 'asc' ? (
-                                  <ChevronUp />
-                                ) : sortModel.find(
-                                    (s) => s.field === column.field
-                                  )?.sort === 'desc' ? (
-                                  <ChevronDown />
-                                ) : (
-                                  <ChevronUp />
-                                )}
-                              </button>
-                            </Tooltip>
+                            <button
+                              onClick={() => handleSort(column.field)}
+                              className={`ml-1 p-1 hover:bg-gray-200 rounded transition-opacity ${
+                                hoveredColumn === column.field ||
+                                sortModel.find((s) => s.field === column.field)
+                                  ? 'opacity-100'
+                                  : 'opacity-0'
+                              }`}
+                            >
+                              {sortModel.find((s) => s.field === column.field)
+                                ?.sort === 'asc' ? (
+                                <ChevronUp />
+                              ) : sortModel.find(
+                                  (s) => s.field === column.field
+                                )?.sort === 'desc' ? (
+                                <ChevronDown />
+                              ) : (
+                                <ChevronUp />
+                              )}
+                            </button>
                           )}
                         </div>
 
