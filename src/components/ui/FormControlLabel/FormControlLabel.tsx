@@ -38,10 +38,11 @@ const FormControlLabel = forwardRef<HTMLLabelElement, FormControlLabelProps>(
     const error = errorProp ?? formControl?.error ?? false;
     const size = sizeProp ?? formControl?.size ?? 'md';
 
-    // Generate a unique ID for the control if it doesn't have one
+    // Prefer control's own id, otherwise use formControl context id, otherwise generate one
     const controlId =
       control.props.id ||
-      `form-control-${Math.random().toString(36).substr(2, 9)}`;
+      formControl?.inputId ||
+      `form-control-${Math.random().toString(36).slice(2, 11)}`;
 
     const sizeClasses = {
       sm: 'text-sm',
@@ -55,12 +56,12 @@ const FormControlLabel = forwardRef<HTMLLabelElement, FormControlLabelProps>(
 
     const labelClasses = `font-medium ${sizeClasses[size]} ${errorClasses}`;
 
-    // Clone the control element and pass down the shared props + ID + ref
+    // Clone control with shared props
     const controlElement = React.cloneElement(control, {
       id: controlId,
       ref: controlRef,
       disabled,
-      ...control.props, // Let control override props if needed
+      ...control.props, // allow explicit props to override
     });
 
     const labelElement = label && (
@@ -107,8 +108,9 @@ const FormControlLabel = forwardRef<HTMLLabelElement, FormControlLabelProps>(
     return (
       <label
         ref={ref}
+        htmlFor={controlId}
         className={`${baseClasses} ${disabledClasses} ${className}`}
-        onClick={onClick} // only forward click, don’t override state
+        onClick={onClick}
         {...props}
       >
         {renderContent()}
