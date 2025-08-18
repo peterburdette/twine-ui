@@ -52,7 +52,7 @@ export interface DataGridProps {
   hideFilters?: boolean;
   hideExport?: boolean;
   hideColumns?: boolean;
-  hidePagination?: boolean;
+  hideRowsPerPage?: boolean;
   density?: 'compact' | 'standard' | 'comfortable';
   disableColumnFilter?: boolean;
   disableColumnMenu?: boolean;

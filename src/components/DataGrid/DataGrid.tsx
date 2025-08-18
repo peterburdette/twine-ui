@@ -66,7 +66,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       hideFilters = false,
       hideExport = false,
       hideColumns = false,
-      hidePagination = false,
+      hideRowsPerPage = false,
       density = 'standard',
       hideFilterLabel = false,
       hideExportLabel = false,
@@ -1823,27 +1823,29 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
         </div>
 
         {/* Footer */}
-        {!hideFooter && !hidePagination && (
+        {!hideFooter && (
           <div className="flex items-center justify-center md:justify-between p-4 border-t">
-            <div className="items-center gap-3 hidden md:flex">
-              <span className="text-sm text-gray-500 whitespace-nowrap">
-                Rows per page:
-              </span>
-              <div className="min-w-[80px]">
-                <Select
-                  options={pageSizeOptions.map((size) => ({
-                    value: size.toString(),
-                    label: size.toString(),
-                  }))}
-                  value={currentPageSize.toString()}
-                  onChange={(value) => {
-                    setCurrentPageSize(Number(value));
-                    setPage(0);
-                  }}
-                  size="sm"
-                />
+            {!hideRowsPerPage && (
+              <div className="items-center gap-3 hidden md:flex">
+                <span className="text-sm text-gray-500 whitespace-nowrap">
+                  Rows per page:
+                </span>
+                <div className="min-w-[80px]">
+                  <Select
+                    options={pageSizeOptions.map((size) => ({
+                      value: size.toString(),
+                      label: size.toString(),
+                    }))}
+                    value={currentPageSize.toString()}
+                    onChange={(value) => {
+                      setCurrentPageSize(Number(value));
+                      setPage(0);
+                    }}
+                    size="sm"
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-500">
