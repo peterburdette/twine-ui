@@ -1477,23 +1477,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
             </div>
 
             <div className="flex items-center gap-2">
-              {!hideExport && (
-                <div className="relative">
-                  <Button
-                    ref={exportButtonRef}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowExportPopover(!showExportPopover)}
-                  >
-                    <Download className="h-4 w-4" />
-                    {!hideExportLabel && (
-                      <span className="ml-2 hidden md:inline">Export</span>
-                    )}
-                  </Button>
-                  <ExportPopoverPortal />
-                </div>
-              )}
-
               {!hideFilters && (
                 <div className="relative">
                   <Button
@@ -1508,6 +1491,23 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                     )}
                   </Button>
                   <FilterPopoverPortal />
+                </div>
+              )}
+
+              {!hideExport && (
+                <div className="relative">
+                  <Button
+                    ref={exportButtonRef}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowExportPopover(!showExportPopover)}
+                  >
+                    <Download className="h-4 w-4" />
+                    {!hideExportLabel && (
+                      <span className="ml-2 hidden md:inline">Export</span>
+                    )}
+                  </Button>
+                  <ExportPopoverPortal />
                 </div>
               )}
 
@@ -1824,7 +1824,11 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
 
         {/* Footer */}
         {!hideFooter && (
-          <div className="flex items-center justify-center md:justify-between p-4 border-t">
+          <div
+            className={`flex items-center justify-center p-4 border-t ${
+              !hideRowsPerPage ? 'md:justify-between' : 'md:justify-end'
+            }`}
+          >
             {!hideRowsPerPage && (
               <div className="items-center gap-3 hidden md:flex">
                 <span className="text-sm text-gray-500 whitespace-nowrap">
