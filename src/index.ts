@@ -16,6 +16,8 @@ export { Chip } from './components/ui/Chip';
 export { Tooltip } from './components/ui/Tooltip';
 export { Button } from './components/ui/Button';
 export { DataGrid } from './components/DataGrid';
+export { FormControl } from './components/ui/FormControl';
+export { FormControlLabel } from './components/ui/FormControlLabel';
 
 // Export types
 export type {
@@ -41,6 +43,8 @@ export type {
   FilterRule,
   ColumnVisibility,
 } from './types';
+export type { FormControlProps } from './components/ui/FormControl';
+export type { FormControlLabelProps } from './components/ui/FormControlLabel';
 
 // Export API system
 export { useGridApiRef, createGridApiRef } from './hooks/useGridApiRef';
