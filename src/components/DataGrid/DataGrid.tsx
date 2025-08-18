@@ -1712,7 +1712,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                           }}
                           inputSize="sm"
                           variant="default"
-                          className="w-full"
+                          fullWidth
                         />
                       </td>
                     ))}
