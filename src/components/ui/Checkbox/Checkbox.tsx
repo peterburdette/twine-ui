@@ -1,5 +1,7 @@
+'use client';
+
 import type React from 'react';
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
 import { useFormControl } from '../FormControl/FormControl';
 
 export interface CheckboxProps
@@ -19,11 +21,13 @@ const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       id,
       disabled: disabledProp,
       required: requiredProp,
+      onChange,
       ...props
     },
     ref
   ) => {
     const formControl = useFormControl();
+    const stableId = useId();
 
     // Inherit from FormControl context, but allow props to override
     const disabled = disabledProp ?? formControl?.disabled ?? false;
@@ -31,8 +35,7 @@ const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     const size = sizeProp ?? formControl?.size ?? 'md';
     const variant = variantProp ?? (formControl?.error ? 'error' : 'default');
 
-    const checkboxId =
-      id || `checkbox-${Math.random().toString(36).substr(2, 9)}`;
+    const checkboxId = id || `checkbox-${stableId}`;
 
     const sizeClasses = {
       sm: 'h-4 w-4',
@@ -57,6 +60,12 @@ const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       : 'cursor-pointer';
     const checkboxClasses = `${baseClasses} ${sizeClasses[size]} ${variantClasses[variant]} ${disabledClasses} ${className}`;
 
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (onChange) {
+        onChange(e);
+      }
+    };
+
     return (
       <input
         ref={ref}
@@ -65,6 +74,7 @@ const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
         className={checkboxClasses}
         disabled={disabled}
         required={required}
+        onChange={handleChange}
         {...props}
       />
     );

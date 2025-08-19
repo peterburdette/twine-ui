@@ -1,5 +1,5 @@
 import type React from 'react';
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
 import { useFormControl } from '../FormControl/FormControl';
 
 export interface RadioProps
@@ -24,6 +24,7 @@ const Radio = forwardRef<HTMLInputElement, RadioProps>(
     ref
   ) => {
     const formControl = useFormControl();
+    const stableId = useId();
 
     // Inherit from FormControl context, but allow props to override
     const disabled = disabledProp ?? formControl?.disabled ?? false;
@@ -31,7 +32,7 @@ const Radio = forwardRef<HTMLInputElement, RadioProps>(
     const size = sizeProp ?? formControl?.size ?? 'md';
     const variant = variantProp ?? (formControl?.error ? 'error' : 'default');
 
-    const radioId = id || `radio-${Math.random().toString(36).substr(2, 9)}`;
+    const radioId = id || `radio-${stableId}`;
 
     const sizeClasses = {
       sm: 'w-4 h-4',

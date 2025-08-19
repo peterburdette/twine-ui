@@ -1,6 +1,6 @@
 'use client';
 
-import React, { forwardRef, useRef } from 'react';
+import React, { forwardRef, useRef, useId } from 'react';
 import { useFormControl } from '../FormControl/FormControl';
 
 export interface FormControlLabelProps
@@ -32,17 +32,15 @@ const FormControlLabel = forwardRef<HTMLLabelElement, FormControlLabelProps>(
   ) => {
     const formControl = useFormControl();
     const controlRef = useRef<HTMLInputElement>(null);
+    const stableId = useId();
 
     const disabled = disabledProp ?? formControl?.disabled ?? false;
     const required = requiredProp ?? formControl?.required ?? false;
     const error = errorProp ?? formControl?.error ?? false;
     const size = sizeProp ?? formControl?.size ?? 'md';
 
-    // Prefer control's own id, otherwise use formControl context id, otherwise generate one
     const controlId =
-      control.props.id ||
-      formControl?.inputId ||
-      `form-control-${Math.random().toString(36).slice(2, 11)}`;
+      control.props.id || formControl?.inputId || `form-control-${stableId}`;
 
     const sizeClasses = {
       sm: 'text-sm',
@@ -56,12 +54,11 @@ const FormControlLabel = forwardRef<HTMLLabelElement, FormControlLabelProps>(
 
     const labelClasses = `font-medium ${sizeClasses[size]} ${errorClasses}`;
 
-    // Clone control with shared props
     const controlElement = React.cloneElement(control, {
       id: controlId,
       ref: controlRef,
       disabled,
-      ...control.props, // allow explicit props to override
+      ...control.props,
     });
 
     const labelElement = label && (

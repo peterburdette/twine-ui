@@ -1,8 +1,10 @@
 'use client';
 
 import type React from 'react';
-import { forwardRef, useState, useRef, useEffect } from 'react';
+import { forwardRef, useState, useRef, useEffect, useId } from 'react';
 import { createPortal } from 'react-dom';
+import { ChevronDown, Check } from 'lucide-react';
+import { cn } from '../../../lib/utils';
 
 export interface SelectOption {
   value: string;
@@ -10,40 +12,42 @@ export interface SelectOption {
   disabled?: boolean;
 }
 
-export interface SelectProps {
+export interface SelectProps
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'> {
   label?: string;
   error?: string;
   helperText?: string;
   options: SelectOption[];
-  placeholder?: string;
-  size?: 'sm' | 'md' | 'lg';
-  variant?: 'default' | 'filled' | 'outlined' | 'ghost' | 'underline';
   value?: string;
   onChange?: (value: string) => void;
+  placeholder?: string;
   disabled?: boolean;
+  size?: 'sm' | 'md' | 'lg';
+  variant?: 'default' | 'filled' | 'outlined' | 'ghost' | 'underline';
+  fullWidth?: boolean;
   required?: boolean;
-  className?: string;
-  id?: string;
   showFocusRing?: boolean;
+  id?: string;
 }
 
 const Select = forwardRef<HTMLDivElement, SelectProps>(
   (
     {
-      className = '',
+      options,
+      value,
+      onChange,
+      placeholder = 'Select an option...',
       label,
       error,
       helperText,
-      options,
-      placeholder = 'Select an option...',
+      disabled = false,
       size = 'md',
       variant = 'default',
-      value,
-      onChange,
-      disabled = false,
+      fullWidth = false,
       required = false,
       showFocusRing = false,
       id,
+      className = '',
       ...props
     },
     ref
@@ -54,8 +58,10 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       left: 0,
       width: 0,
     });
-    const selectId = id || `select-${Math.random().toString(36).substr(2, 9)}`;
+    const selectRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
+    const generatedId = useId();
+    const selectId = id || `select-${generatedId}`;
 
     const selectedOption = options.find((option) => option.value === value);
 
@@ -80,12 +86,10 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
     }, [isOpen, options.length]);
 
     useEffect(() => {
-      if (!isOpen) return;
-
       const handleClickOutside = (event: MouseEvent) => {
         if (
-          triggerRef.current &&
-          !triggerRef.current.contains(event.target as Node)
+          selectRef.current &&
+          !selectRef.current.contains(event.target as Node)
         ) {
           setIsOpen(false);
         }
@@ -95,9 +99,11 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
         setIsOpen(false);
       };
 
-      document.addEventListener('mousedown', handleClickOutside);
-      window.addEventListener('scroll', handleScroll, true);
-      window.addEventListener('resize', handleScroll);
+      if (isOpen) {
+        document.addEventListener('mousedown', handleClickOutside);
+        window.addEventListener('scroll', handleScroll, true);
+        window.addEventListener('resize', handleScroll);
+      }
 
       return () => {
         document.removeEventListener('mousedown', handleClickOutside);
@@ -106,34 +112,19 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       };
     }, [isOpen]);
 
-    const baseClasses = `w-full rounded-md border transition-colors text-left ${
-      showFocusRing
-        ? 'focus:outline-none focus:ring-2 focus:ring-offset-2'
-        : 'focus:outline-none'
-    }`;
-
-    const variantClasses = {
-      default: `border-gray-300 bg-white focus:border-blue-500 ${
-        showFocusRing ? 'focus:ring-blue-500' : ''
-      }`,
-      filled: `border-transparent bg-gray-100 focus:bg-white focus:border-blue-500 ${
-        showFocusRing ? 'focus:ring-blue-500' : ''
-      }`,
-      outlined: `border-2 border-gray-300 bg-transparent focus:border-blue-500 ${
-        showFocusRing ? 'focus:ring-blue-500' : ''
-      }`,
-      ghost: `border-transparent bg-transparent hover:bg-gray-50 focus:bg-white focus:border-blue-500 ${
-        showFocusRing ? 'focus:ring-blue-500' : ''
-      }`,
-      underline: `border-0 border-b-2 border-gray-300 bg-transparent rounded-none focus:border-b-blue-500 ${
-        showFocusRing ? 'focus:ring-blue-500' : ''
-      }`,
-    };
-
     const sizeClasses = {
-      sm: 'px-3 py-1.5 text-sm',
+      sm: 'px-2.5 py-1.5 text-sm',
       md: 'px-3 py-2 text-base',
       lg: 'px-4 py-3 text-lg',
+    };
+
+    const variantClasses = {
+      default: 'border border-gray-300 bg-white hover:bg-gray-50',
+      filled: 'border-transparent bg-gray-100 hover:bg-white',
+      outlined: 'border-2 border-gray-300 bg-transparent hover:bg-white',
+      ghost: 'border border-transparent bg-transparent hover:bg-gray-50',
+      underline:
+        'border-0 border-b-2 border-gray-300 bg-transparent rounded-none hover:border-b-gray-50',
     };
 
     const errorClasses = error
@@ -146,7 +137,15 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       ? 'opacity-50 cursor-not-allowed'
       : 'cursor-pointer';
 
-    const selectClasses = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${errorClasses} ${disabledClasses} ${className}`;
+    const selectClasses = cn(
+      'relative w-full flex items-center justify-between rounded-md transition-colors focus:outline-none',
+      sizeClasses[size],
+      variantClasses[variant],
+      errorClasses,
+      disabledClasses,
+      showFocusRing && 'focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+      className
+    );
 
     const handleOptionSelect = (optionValue: string) => {
       if (!disabled) {
@@ -155,31 +154,46 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       }
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
+    const handleKeyDown = (event: React.KeyboardEvent) => {
       if (disabled) return;
 
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        setIsOpen(!isOpen);
-      } else if (e.key === 'Escape') {
-        setIsOpen(false);
-      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (!isOpen) {
-          setIsOpen(true);
-        } else {
-          // Handle option navigation
-          const currentIndex = options.findIndex((opt) => opt.value === value);
-          const nextIndex =
-            e.key === 'ArrowDown'
-              ? Math.min(currentIndex + 1, options.length - 1)
-              : Math.max(currentIndex - 1, 0);
-
-          const nextOption = options[nextIndex];
-          if (nextOption && !nextOption.disabled) {
-            onChange?.(nextOption.value);
+      switch (event.key) {
+        case 'Enter':
+        case ' ':
+          event.preventDefault();
+          setIsOpen(!isOpen);
+          break;
+        case 'Escape':
+          setIsOpen(false);
+          break;
+        case 'ArrowDown':
+          event.preventDefault();
+          if (!isOpen) {
+            setIsOpen(true);
+          } else {
+            const currentIndex = options.findIndex(
+              (opt) => opt.value === value
+            );
+            const nextIndex = Math.min(currentIndex + 1, options.length - 1);
+            const nextOption = options[nextIndex];
+            if (nextOption && !nextOption.disabled) {
+              onChange?.(nextOption.value);
+            }
           }
-        }
+          break;
+        case 'ArrowUp':
+          event.preventDefault();
+          if (isOpen) {
+            const currentIndex = options.findIndex(
+              (opt) => opt.value === value
+            );
+            const nextIndex = Math.max(currentIndex - 1, 0);
+            const nextOption = options[nextIndex];
+            if (nextOption && !nextOption.disabled) {
+              onChange?.(nextOption.value);
+            }
+          }
+          break;
       }
     };
 
@@ -187,50 +201,61 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       if (!isOpen || typeof window === 'undefined') return null;
 
       return createPortal(
-        <div
-          className="fixed bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto"
-          style={{
-            top: dropdownPosition.top,
-            left: dropdownPosition.left,
-            width: dropdownPosition.width,
-            zIndex: 999999,
-          }}
-        >
+        <>
           <div
-            className="py-1"
+            className="fixed inset-0 z-40"
+            onClick={() => setIsOpen(false)}
+          />
+          <div
+            className="fixed z-50 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto"
+            style={{
+              top: dropdownPosition.top,
+              left: dropdownPosition.left,
+              width: dropdownPosition.width,
+            }}
             role="listbox"
+            aria-labelledby={selectId}
           >
-            {options.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                  option.disabled
-                    ? 'text-gray-400 cursor-not-allowed'
-                    : value === option.value
-                    ? 'bg-blue-100 text-blue-900'
-                    : 'text-gray-900 hover:bg-gray-100'
-                }`}
-                onClick={() =>
-                  !option.disabled && handleOptionSelect(option.value)
-                }
-                disabled={option.disabled}
-                role="option"
-                aria-selected={value === option.value}
-              >
-                {option.label}
-              </button>
-            ))}
+            {options.length === 0 ? (
+              <div className="px-3 py-2 text-sm text-gray-500">
+                No options available
+              </div>
+            ) : (
+              options.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={cn(
+                    'w-full flex items-center justify-between px-3 py-2 text-sm cursor-pointer transition-colors',
+                    option.disabled
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:bg-gray-100',
+                    value === option.value && 'bg-blue-50 text-blue-600'
+                  )}
+                  onClick={() =>
+                    !option.disabled && handleOptionSelect(option.value)
+                  }
+                  disabled={option.disabled}
+                  role="option"
+                  aria-selected={value === option.value}
+                >
+                  <span className="truncate">{option.label}</span>
+                  {value === option.value && (
+                    <Check className="h-4 w-4 text-blue-600 flex-shrink-0 ml-2" />
+                  )}
+                </button>
+              ))
+            )}
           </div>
-        </div>,
+        </>,
         document.body
       );
     };
 
     return (
       <div
+        ref={selectRef}
         className="w-full"
-        ref={ref}
       >
         {label && (
           <label
@@ -242,43 +267,32 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
           </label>
         )}
 
-        <div className="relative">
-          <button
-            ref={triggerRef}
-            id={selectId}
-            type="button"
-            className={selectClasses}
-            onClick={() => !disabled && setIsOpen(!isOpen)}
-            onKeyDown={handleKeyDown}
-            disabled={disabled}
-            aria-haspopup="listbox"
-            aria-expanded={isOpen}
-            aria-required={required}
-          >
-            <span
-              className={selectedOption ? 'text-gray-900' : 'text-gray-500'}
-            >
-              {selectedOption ? selectedOption.label : placeholder}
-            </span>
-            <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-              <svg
-                className={`h-5 w-5 text-gray-400 transition-transform ${
-                  isOpen ? 'rotate-180' : ''
-                }`}
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </span>
-          </button>
+        <button
+          ref={triggerRef}
+          id={selectId}
+          type="button"
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-haspopup="listbox"
+          tabIndex={disabled ? -1 : 0}
+          className={selectClasses}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+          onKeyDown={handleKeyDown}
+          disabled={disabled}
+          aria-required={required}
+        >
+          <span className={cn('truncate', !selectedOption && 'text-gray-500')}>
+            {selectedOption ? selectedOption.label : placeholder}
+          </span>
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 text-gray-400 transition-transform flex-shrink-0 ml-2',
+              isOpen && 'rotate-180'
+            )}
+          />
+        </button>
 
-          <DropdownPortal />
-        </div>
+        {DropdownPortal()}
 
         {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
         {helperText && !error && (

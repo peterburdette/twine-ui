@@ -1,7 +1,7 @@
 'use client';
 
 import type React from 'react';
-import { forwardRef, useState, useEffect } from 'react';
+import { forwardRef, useState, useEffect, useId } from 'react';
 import { useFormControl } from '../FormControl/FormControl';
 import { Select } from '../Select/Select';
 
@@ -104,17 +104,14 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     const formControl = useFormControl();
     const [focused, setFocused] = useState(false);
     const [hasValue, setHasValue] = useState(false);
+    const stableId = useId();
 
     // Inherit from FormControl context, but allow props to override
     const error = errorProp ?? formControl?.error ?? false;
     const disabled = disabledProp ?? formControl?.disabled ?? false;
     const required = requiredProp ?? formControl?.required ?? false;
 
-    // Use provided id, or FormControl's inputId, or generate one
-    const inputId =
-      idProp ||
-      formControl?.inputId ||
-      `input-${Math.random().toString(36).substr(2, 9)}`;
+    const inputId = idProp || formControl?.inputId || `input-${stableId}`;
 
     // Check if input has value
     useEffect(() => {
