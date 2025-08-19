@@ -100,13 +100,13 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       };
 
       if (isOpen) {
-        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('click', handleClickOutside);
         window.addEventListener('scroll', handleScroll, true);
         window.addEventListener('resize', handleScroll);
       }
 
       return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('click', handleClickOutside);
         window.removeEventListener('scroll', handleScroll, true);
         window.removeEventListener('resize', handleScroll);
       };
