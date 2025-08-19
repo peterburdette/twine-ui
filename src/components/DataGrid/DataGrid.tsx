@@ -716,6 +716,17 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       );
     };
 
+    const handleSelectAll = (checked: boolean) => {
+      if (checked) {
+        const allIds = rows.map((row) => String(row.id)); // Use all rows, not just paginatedRows
+        setSelectedRows(allIds);
+        onSelectionModelChange?.(allIds);
+      } else {
+        setSelectedRows([]);
+        onSelectionModelChange?.([]);
+      }
+    };
+
     const handleRowSelection = (rowId: string, checked: boolean) => {
       const newSelection = new Set(selectedRows);
       if (checked) {
@@ -725,17 +736,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       }
       setSelectedRows(Array.from(newSelection));
       onSelectionModelChange?.(Array.from(newSelection));
-    };
-
-    const handleSelectAll = (checked: boolean) => {
-      if (checked) {
-        const allIds = new Set(paginatedRows.map((row) => row.id));
-        setSelectedRows(Array.from(allIds));
-        onSelectionModelChange?.(Array.from(allIds));
-      } else {
-        setSelectedRows([]);
-        onSelectionModelChange?.([]);
-      }
     };
 
     const handleDragStart = (e: React.DragEvent, columnField: string) => {
@@ -1551,12 +1551,15 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                       <div className="flex items-center justify-center">
                         <Checkbox
                           checked={
-                            paginatedRows.length > 0 &&
-                            paginatedRows.every((row) =>
+                            rows.length > 0 &&
+                            rows.every((row) =>
                               selectedRows.includes(String(row.id))
                             )
                           }
-                          onChange={(e) => handleSelectAll(e.target.checked)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleSelectAll(e.target.checked);
+                          }}
                         />
                       </div>
                     </th>
@@ -1786,9 +1789,13 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                           <div className="flex items-center justify-center">
                             <Checkbox
                               checked={selectedRows.includes(String(row.id))}
-                              onChange={(e) =>
-                                handleRowSelection(row.id, e.target.checked)
-                              }
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleRowSelection(
+                                  String(row.id),
+                                  e.target.checked
+                                );
+                              }}
                             />
                           </div>
                         </td>
