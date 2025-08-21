@@ -12,7 +12,7 @@ import {
 } from 'react';
 import {
   Search,
-  Filter,
+  Filter as FilterIcon,
   Download,
   Settings,
   ChevronUp,
@@ -22,7 +22,6 @@ import {
   ChevronsLeft,
   ChevronsRight,
   X,
-  Plus,
 } from 'lucide-react';
 import { Input } from '../ui/Input/Input';
 import { Checkbox } from '../ui/Checkbox/Checkbox';
@@ -47,6 +46,8 @@ import type {
 } from '../../types/api';
 import { createPortal } from 'react-dom';
 import type { Column } from '../../types';
+
+/* ---------------------- Columns Popover ---------------------- */
 
 interface ColumnPopoverPortalProps {
   show: boolean;
@@ -102,7 +103,6 @@ const ColumnPopoverPortal: React.FC<ColumnPopoverPortalProps> = ({
               placeholder="Search columns..."
               value={columnSearchQuery}
               onChange={(e) => setColumnSearchQuery(e.target.value)}
-              className=""
               inputSize="sm"
               variant="default"
             />
@@ -120,7 +120,6 @@ const ColumnPopoverPortal: React.FC<ColumnPopoverPortalProps> = ({
                   [column.field]: !(tempColumnVisibility[column.field] ?? true),
                 };
                 setTempColumnVisibility(newVisibility);
-                // Apply changes immediately
                 setColumnVisibility(newVisibility);
               }}
             >
@@ -133,7 +132,6 @@ const ColumnPopoverPortal: React.FC<ColumnPopoverPortalProps> = ({
                     [column.field]: e.target.checked,
                   };
                   setTempColumnVisibility(newVisibility);
-                  // Apply changes immediately
                   setColumnVisibility(newVisibility);
                 }}
               />
@@ -144,7 +142,6 @@ const ColumnPopoverPortal: React.FC<ColumnPopoverPortalProps> = ({
           ))}
         </div>
 
-        {/* Footer with Show/Hide All toggle and Reset */}
         <div className="flex justify-between items-center pt-4 border-t">
           <Button
             variant="outline"
@@ -154,7 +151,6 @@ const ColumnPopoverPortal: React.FC<ColumnPopoverPortalProps> = ({
                 (visible) => visible !== false
               );
               if (allVisible) {
-                // Hide all
                 const allHidden = columns.reduce(
                   (acc, col) => ({ ...acc, [col.field]: false }),
                   {}
@@ -162,7 +158,6 @@ const ColumnPopoverPortal: React.FC<ColumnPopoverPortalProps> = ({
                 setTempColumnVisibility(allHidden);
                 setColumnVisibility(allHidden);
               } else {
-                // Show all
                 const allVisibleModel = columns.reduce(
                   (acc, col) => ({ ...acc, [col.field]: true }),
                   {}
@@ -200,7 +195,7 @@ const ColumnPopoverPortal: React.FC<ColumnPopoverPortalProps> = ({
   );
 };
 
-// ----------------- Filter Popover (hoisted) -----------------
+/* ---------------------- Filters Popover ---------------------- */
 
 interface FilterPopoverPortalProps {
   show: boolean;
@@ -217,6 +212,11 @@ interface FilterPopoverPortalProps {
   availableFields: Array<{ field: string; label: string }>;
   availableOperators: Array<{ value: string; label: string }>;
 
+  /* New props to support Clear + Apply logic */
+  committedFilters: FilterRule[];
+  onClearTempFilters: () => void;
+
+  /* Commit hooks provided by parent */
   setFilterRules: (rules: FilterRule[]) => void;
   setFilterModel: (model: Record<string, string>) => void;
   onFilterModelChange?: (rules: FilterRule[]) => void;
@@ -235,15 +235,46 @@ const FilterPopoverPortal: React.FC<FilterPopoverPortalProps> = ({
   onRemoveFilter,
   availableFields,
   availableOperators,
+  committedFilters,
+  onClearTempFilters,
   setFilterRules,
   setFilterModel,
   onFilterModelChange,
 }) => {
   if (!show || typeof window === 'undefined') return null;
 
+  /* Equality + enablement logic */
+  const normalize = (arr: FilterRule[]) =>
+    [...arr]
+      .map((r) => ({
+        field: r.field,
+        operator: r.operator,
+        value: String(r.value ?? ''),
+      }))
+      .sort((a, b) =>
+        (a.field + a.operator + a.value).localeCompare(
+          b.field + b.operator + b.value
+        )
+      );
+
+  const hasFilters = filters.length > 0;
+  const isEqual =
+    normalize(filters).length === normalize(committedFilters).length &&
+    normalize(filters).every((v, i) => {
+      const b = normalize(committedFilters)[i];
+      return (
+        v.field === b.field &&
+        v.operator === b.operator &&
+        String(v.value ?? '') === String(b.value ?? '')
+      );
+    });
+
+  const canClear = hasFilters;
+  const canApply = hasFilters || !isEqual;
+
   return createPortal(
     <>
-      {/* Backdrop closes only when clicked directly */}
+      {/* Backdrop closes only on direct outside mousedown */}
       <div
         className="fixed inset-0 z-40"
         onMouseDown={(e) => {
@@ -263,7 +294,7 @@ const FilterPopoverPortal: React.FC<FilterPopoverPortalProps> = ({
         <div className="space-y-3 max-h-72 overflow-auto pr-1">
           {filters.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-gray-500 py-12 text-center">
-              <Filter className="h-8 w-8 mb-2" />
+              <FilterIcon className="h-8 w-8 mb-2" />
               <div className="text-base font-medium">No filters applied</div>
               <div className="text-sm">
                 Click &quot;Add Filter&quot; to get started
@@ -331,36 +362,49 @@ const FilterPopoverPortal: React.FC<FilterPopoverPortalProps> = ({
           >
             Add Filter
           </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              // Commit the filters (which are tempFilterRules in DataGrid)
-              setFilterRules(filters);
 
-              // Build filter model object for quick filtering
-              const newFilterModel: Record<string, string> = {};
-              filters.forEach((r) => {
-                if (r.operator === 'contains' && r.value) {
-                  newFilterModel[r.field] = r.value;
-                }
-              });
-              setFilterModel(newFilterModel);
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!canClear}
+              onClick={() => {
+                onClearTempFilters();
+              }}
+            >
+              Clear
+            </Button>
+            <Button
+              size="sm"
+              disabled={!canApply}
+              onClick={() => {
+                // Commit to parent
+                setFilterRules(filters);
 
-              // Notify parent if needed
-              onFilterModelChange?.(filters);
+                // Build filter model for quick filtering
+                const newFilterModel: Record<string, string> = {};
+                filters.forEach((r) => {
+                  if (r.operator === 'contains' && r.value) {
+                    newFilterModel[r.field] = String(r.value);
+                  }
+                });
+                setFilterModel(newFilterModel);
 
-              // Finally close
-              onClose();
-            }}
-          >
-            Done
-          </Button>
+                onFilterModelChange?.(filters);
+                onClose();
+              }}
+            >
+              Apply
+            </Button>
+          </div>
         </div>
       </div>
     </>,
     document.body as HTMLElement
   );
 };
+
+/* ---------------------- DataGrid ---------------------- */
 
 const DataGrid = forwardRef<GridApiRef, DataGridProps>(
   (
@@ -490,7 +534,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
     // API
     const api: GridApiRef = useMemo(
       () => ({
-        // ... (unchanged API methods)
         getRow: (id: string | number) => {
           return rows.find((row) => row.id === id) || null;
         },
@@ -550,7 +593,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
           setSelectedRows(Array.from(newSelection));
           onSelectionModelChange?.(Array.from(newSelection));
         },
-        selectRowRange: (range, isSelected = true, resetSelection = false) => {
+        selectRowRange: () => {
           console.warn('selectRowRange not fully implemented');
         },
         deselectRow: (id: string | number) => {
@@ -560,7 +603,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
           api.selectRows(ids, false);
         },
         selectAll: () => {
-          const allIds = rows.map((row) => String(row.id));
+          const allIds = rows.map((row) =>
+            String(row[idField as keyof typeof row] ?? row.id)
+          );
           setSelectedRows(allIds);
           onSelectionModelChange?.(allIds);
         },
@@ -777,7 +822,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
         // Utility methods
         getCellValue: (id: string | number, field: string) => {
           const row = rows.find((r) => r.id === id);
-          return row ? row[field] : null;
+          return row ? (row as any)[field] : null;
         },
         setCellValue: () => {
           console.warn(
@@ -825,10 +870,8 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       ]
     );
 
-    // Expose API through ref
     useImperativeHandle(ref, () => api, [api]);
 
-    // Also expose through apiRef prop if provided
     useEffect(() => {
       if (apiRef) {
         apiRef.current = api;
@@ -874,11 +917,11 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       }
     };
 
-    // Processing rows (search + advanced filters + column filters)
+    /* -------------------- Data processing -------------------- */
+
     const processedRows = useMemo(() => {
       let filtered = rows;
 
-      // Search filter
       if (searchQuery) {
         filtered = filtered.filter((row) =>
           Object.values(row).some((value) =>
@@ -887,14 +930,15 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
         );
       }
 
-      // Advanced filters
       filterRules
         .filter(
           (rule) => rule.value != null && String(rule.value).trim() !== ''
         )
         .forEach((rule) => {
           filtered = filtered.filter((row) => {
-            const cellValue = String(row[rule.field] || '').toLowerCase();
+            const cellValue = String(
+              (row as any)[rule.field] || ''
+            ).toLowerCase();
             const filterValue = String(rule.value || '').toLowerCase();
 
             switch (rule.operator) {
@@ -916,11 +960,12 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
           });
         });
 
-      // Column filters
       Object.entries(filterModel).forEach(([field, filterValue]) => {
         if (filterValue) {
           filtered = filtered.filter((row) =>
-            String(row[field]).toLowerCase().includes(filterValue.toLowerCase())
+            String((row as any)[field])
+              .toLowerCase()
+              .includes(String(filterValue).toLowerCase())
           );
         }
       });
@@ -935,31 +980,30 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
         for (const sort of sortModel) {
           const column = columns.find((col) => col.field === sort.field);
 
-          let aVal, bVal;
+          let aVal: any, bVal: any;
           if (column?.valueGetter) {
             aVal = column.valueGetter({
-              id: a.id || a[idField] || 0,
+              id: (a as any).id || (a as any)[idField] || 0,
               row: a,
               field: sort.field,
-              value: a[sort.field],
+              value: (a as any)[sort.field],
               colDef: column,
               api,
             });
             bVal = column.valueGetter({
-              id: b.id || b[idField] || 0,
+              id: (b as any).id || (b as any)[idField] || 0,
               row: b,
               field: sort.field,
-              value: b[sort.field],
+              value: (b as any)[sort.field],
               colDef: column,
               api,
             });
           } else {
-            aVal = a[sort.field];
-            bVal = b[sort.field];
+            aVal = (a as any)[sort.field];
+            bVal = (b as any)[sort.field];
           }
 
           let comparison = 0;
-
           if (aVal < bVal) comparison = -1;
           if (aVal > bVal) comparison = 1;
 
@@ -994,7 +1038,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       onSortModelChange?.(newSortModel);
     };
 
-    // ----- FILTERS: two-phase (edit temp in popover, commit on Done) -----
+    /* -------------------- Filter editing (temp) -------------------- */
 
     const addFilterRule = () => {
       setTempFilterRules((prev) => [
@@ -1020,7 +1064,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
 
     const handleSelectAll = (checked: boolean) => {
       if (checked) {
-        const allIds = rows.map((row) => String(row.id));
+        const allIds = rows.map((row) => String((row as any).id));
         setSelectedRows(allIds);
         onSelectionModelChange?.(allIds);
       } else {
@@ -1031,11 +1075,8 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
 
     const handleRowSelection = (rowId: string, checked: boolean) => {
       const newSelection = new Set(selectedRows);
-      if (checked) {
-        newSelection.add(rowId);
-      } else {
-        newSelection.delete(rowId);
-      }
+      if (checked) newSelection.add(rowId);
+      else newSelection.delete(rowId);
       setSelectedRows(Array.from(newSelection));
       onSelectionModelChange?.(Array.from(newSelection));
     };
@@ -1091,21 +1132,14 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
     const handleResizeMove = useCallback(
       (e: MouseEvent) => {
         if (!isResizing) return;
-
         const diff = e.clientX - dragStartX;
         const newWidth = Math.max(50, dragStartWidth + diff);
-
-        setColumnWidths((prev) => ({
-          ...prev,
-          [isResizing]: newWidth,
-        }));
+        setColumnWidths((prev) => ({ ...prev, [isResizing]: newWidth }));
       },
       [isResizing, dragStartX, dragStartWidth]
     );
 
-    const handleResizeEnd = useCallback(() => {
-      setIsResizing(null);
-    }, []);
+    const handleResizeEnd = useCallback(() => setIsResizing(null), []);
 
     useEffect(() => {
       if (isResizing) {
@@ -1113,7 +1147,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
         document.addEventListener('mouseup', handleResizeEnd);
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
-
         return () => {
           document.removeEventListener('mousemove', handleResizeMove);
           document.removeEventListener('mouseup', handleResizeEnd);
@@ -1123,13 +1156,13 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       }
     }, [isResizing, handleResizeMove, handleResizeEnd]);
 
-    // Align filter popover: top-right of popover under button (28rem = 448px)
+    // Align filter popover under button (28rem = 448px)
     useEffect(() => {
       if (showFilterPopover && filterButtonRef.current) {
         const rect = filterButtonRef.current.getBoundingClientRect();
         setFilterPopoverPosition({
           top: rect.bottom + 4,
-          left: rect.right - 448, // match w-[28rem]
+          left: rect.right - 448,
         });
       }
     }, [showFilterPopover]);
@@ -1139,7 +1172,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
         const rect = exportButtonRef.current.getBoundingClientRect();
         setExportPopoverPosition({
           top: rect.bottom + 4,
-          left: rect.right - 192, // 192px = w-48
+          left: rect.right - 192,
         });
       }
     }, [showExportPopover]);
@@ -1149,14 +1182,13 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
         const rect = columnButtonRef.current.getBoundingClientRect();
         setColumnPopoverPosition({
           top: rect.bottom + 4,
-          left: rect.right - 320, // 320px = w-80
+          left: rect.right - 320,
         });
       }
     }, [showColumnPopover]);
 
     useEffect(() => {
       if (!showExportPopover) return;
-
       const handleScroll = (event: Event) => {
         if (
           exportPopoverRef.current &&
@@ -1166,18 +1198,16 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
         }
         setShowExportPopover(false);
       };
-
       window.addEventListener('scroll', handleScroll, true);
       return () => {
         window.removeEventListener('scroll', handleScroll, true);
       };
     }, [showExportPopover]);
 
-    // NOTE: intentionally no "close on scroll" effect for filter popover to keep dropdowns stable
+    // IMPORTANT: no "close on scroll" for filter popover to keep dropdowns stable
 
     useEffect(() => {
       if (!showColumnPopover) return;
-
       const handleScroll = (event: Event) => {
         if (
           columnPopoverRef.current &&
@@ -1187,7 +1217,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
         }
         setShowColumnPopover(false);
       };
-
       window.addEventListener('scroll', handleScroll, true);
       return () => {
         window.removeEventListener('scroll', handleScroll, true);
@@ -1242,6 +1271,8 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       );
     };
 
+    /* -------------------- Editing cells -------------------- */
+
     const handleCellDoubleClick = (
       rowId: string | number,
       field: string,
@@ -1254,24 +1285,18 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
 
     const handleEditSave = () => {
       if (!editingCell) return;
-
-      const updatedRows = rows.map((row) => {
-        if (row.id === editingCell.rowId) {
-          return { ...row, [editingCell.field]: editValue };
-        }
-        return row;
-      });
-
+      const updatedRows = rows.map((row) =>
+        (row as any).id === editingCell.rowId
+          ? { ...(row as any), [editingCell.field]: editValue }
+          : row
+      );
       setRows(updatedRows);
-
       onCellValueChange?.({
         id: editingCell.rowId,
         field: editingCell.field,
         value: editValue,
       });
-
       onRowsChange?.(updatedRows);
-
       setEditingCell(null);
       setEditValue('');
     };
@@ -1294,19 +1319,20 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
     const renderCell = (row: any, column: Column) => {
       const value = column.valueGetter
         ? column.valueGetter({
-            id: row[idField],
+            id: (row as any)[idField],
             row,
             field: column.field,
-            value: row[column.field],
+            value: (row as any)[column.field],
             colDef: column,
             api,
           })
-        : row[column.field];
+        : (row as any)[column.field];
 
       const isCellEditable =
         isEditable && column.editable !== false && !column.valueGetter;
       const isCurrentlyEditing =
-        editingCell?.rowId === row.id && editingCell?.field === column.field;
+        editingCell?.rowId === (row as any).id &&
+        editingCell?.field === column.field;
 
       if (isCurrentlyEditing) {
         return (
@@ -1314,39 +1340,8 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
             type="text"
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const newRows = rows.map((r) =>
-                  r.id === row.id ? { ...r, [column.field]: editValue } : r
-                );
-                setRows(newRows);
-                onCellValueChange?.({
-                  id: row.id,
-                  field: column.field,
-                  value: editValue,
-                });
-                onRowsChange?.(newRows);
-                setEditingCell(null);
-                setEditValue('');
-              } else if (e.key === 'Escape') {
-                setEditingCell(null);
-                setEditValue('');
-              }
-            }}
-            onBlur={() => {
-              const newRows = rows.map((r) =>
-                r.id === row.id ? { ...r, [column.field]: editValue } : r
-              );
-              setRows(newRows);
-              onCellValueChange?.({
-                id: row.id,
-                field: column.field,
-                value: editValue,
-              });
-              onRowsChange?.(newRows);
-              setEditingCell(null);
-              setEditValue('');
-            }}
+            onKeyDown={handleEditKeyDown}
+            onBlur={handleEditSave}
             className="w-full h-full px-2 py-1 border-2 border-blue-500 rounded focus:outline-none"
             autoFocus
           />
@@ -1355,7 +1350,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
 
       if (column.renderCell) {
         return column.renderCell({
-          id: row[idField],
+          id: (row as any)[idField],
           value,
           row,
           field: column.field,
@@ -1372,19 +1367,20 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
           className={cn('truncate', isCellEditable && 'cursor-text')}
           onDoubleClick={() => {
             if (isCellEditable) {
-              setEditingCell({ rowId: row.id, field: column.field });
+              setEditingCell({ rowId: (row as any).id, field: column.field });
               setEditValue(String(value || ''));
             }
           }}
         >
-          {String(value || '')}
+          {String(value ?? '')}
         </div>
       );
     };
 
+    /* -------------------- Selection, pagination -------------------- */
+
     const handleRowClick = (row: any, event: React.MouseEvent) => {
       if (!checkboxSelectionOnRowClick || !checkboxSelection) return;
-
       const target = event.target as HTMLElement;
       if (
         (target instanceof HTMLInputElement && target.type === 'checkbox') ||
@@ -1393,17 +1389,15 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       ) {
         return;
       }
-
-      const rowId = String(row.id);
+      const rowId = String((row as any).id);
       const newSelection = selectedRows.includes(rowId)
         ? selectedRows.filter((id) => id !== rowId)
         : [...selectedRows, rowId];
-
       setSelectedRows(newSelection);
       onSelectionModelChange?.(newSelection);
     };
 
-    // ---------- Badge count (dedup across advanced + column filters) ----------
+    /* -------------------- Badge count -------------------- */
 
     const isValueLessOperator = (op: FilterRule['operator']) =>
       op === 'isEmpty' || op === 'isNotEmpty';
@@ -1424,7 +1418,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
 
     const getFilterBadgeCount = () => {
       const sourceRules = showFilterPopover ? tempFilterRules : filterRules;
-
       const activeAdvanced = sourceRules.filter(isRuleActive);
       const keys = new Set(activeAdvanced.map(ruleKey));
 
@@ -1436,13 +1429,12 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
           if (!keys.has(k)) keys.add(k);
         }
       }
-
       return keys.size;
     };
 
     const badgeCount = getFilterBadgeCount();
 
-    // ----- Seed temp rules on popover open (committed rules only) -----
+    /* -------------------- Seed temp rules on open -------------------- */
     useEffect(() => {
       if (showFilterPopover) {
         setTempFilterRules(filterRules);
@@ -1482,17 +1474,12 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                     onClick={() => setShowFilterPopover(!showFilterPopover)}
                     className="relative"
                   >
-                    <Filter className="h-4 w-4" />
+                    <FilterIcon className="h-4 w-4" />
                     {!hideFilterLabel && (
                       <span className="ml-2 hidden md:inline">Filters</span>
                     )}
-
                     {badgeCount > 0 && (
-                      <span
-                        className="ml-2 inline-flex items-center justify-center
-                  px-1.5 py-0.5 text-xs font-medium
-                  bg-blue-100 text-blue-700 rounded-full"
-                      >
+                      <span className="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
                         {badgeCount}
                       </span>
                     )}
@@ -1527,6 +1514,8 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                       { value: 'isEmpty', label: 'Is empty' },
                       { value: 'isNotEmpty', label: 'Is not empty' },
                     ]}
+                    committedFilters={filterRules}
+                    onClearTempFilters={() => setTempFilterRules([])}
                     setFilterRules={setFilterRules}
                     setFilterModel={setFilterModel}
                     onFilterModelChange={onFilterModelChange}
@@ -1606,7 +1595,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                           checked={
                             rows.length > 0 &&
                             rows.every((row) =>
-                              selectedRows.includes(String(row.id))
+                              selectedRows.includes(String((row as any).id))
                             )
                           }
                           onChange={(e) => {
@@ -1719,18 +1708,16 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                           value={filterModel[column.field] || ''}
                           onChange={(e) => {
                             const newValue = e.target.value;
-                            // Update column filter model
                             setFilterModel((prev) => {
                               const next = { ...prev };
                               if (newValue && newValue.trim() !== '') {
-                                next[column.field] = newValue;
+                                (next as any)[column.field] = newValue;
                               } else {
-                                delete next[column.field];
+                                delete (next as any)[column.field];
                               }
                               return next;
                             });
 
-                            // Sync with committed filter rules (contains)
                             setFilterRules((prevRules) => {
                               const existingRuleIndex = prevRules.findIndex(
                                 (rule) =>
@@ -1821,9 +1808,11 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
               ) : (
                 paginatedRows.map((row) => (
                   <tr
-                    key={row.id}
+                    key={(row as any).id}
                     className={`border-b border-gray-200 hover:bg-gray-50 ${
-                      selectedRows.includes(String(row.id)) ? 'bg-blue-50' : ''
+                      selectedRows.includes(String((row as any).id))
+                        ? 'bg-blue-50'
+                        : ''
                     } ${!hideGridLines ? 'border-b' : ''}`}
                     onClick={(e) => handleRowClick(row, e)}
                     style={{
@@ -1844,11 +1833,13 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                         >
                           <div className="flex items-center justify-center">
                             <Checkbox
-                              checked={selectedRows.includes(String(row.id))}
+                              checked={selectedRows.includes(
+                                String((row as any).id)
+                              )}
                               onChange={(e) => {
                                 e.stopPropagation();
                                 handleRowSelection(
-                                  String(row.id),
+                                  String((row as any).id),
                                   e.target.checked
                                 );
                               }}
