@@ -48,6 +48,320 @@ import type {
 import { createPortal } from 'react-dom';
 import type { Column } from '../../types';
 
+interface ColumnPopoverPortalProps {
+  show: boolean;
+  onClose: () => void;
+  columnPopoverRef: React.RefObject<HTMLDivElement>;
+  position: { top: number; left: number };
+  columnSearchQuery: string;
+  setColumnSearchQuery: (value: string) => void;
+  filteredColumns: Column[];
+  tempColumnVisibility: Record<string, boolean>;
+  setTempColumnVisibility: (visibility: Record<string, boolean>) => void;
+  setColumnVisibility: (visibility: Record<string, boolean>) => void;
+  columns: Column[];
+}
+
+const ColumnPopoverPortal: React.FC<ColumnPopoverPortalProps> = ({
+  show,
+  onClose,
+  columnPopoverRef,
+  position,
+  columnSearchQuery,
+  setColumnSearchQuery,
+  filteredColumns,
+  tempColumnVisibility,
+  setTempColumnVisibility,
+  setColumnVisibility,
+  columns,
+}) => {
+  if (!show || typeof window === 'undefined') return null;
+  return createPortal(
+    <>
+      <div
+        className="fixed inset-0 z-40"
+        onClick={() => onClose()}
+      />
+      <div
+        ref={columnPopoverRef}
+        className="fixed w-80 p-4 bg-white border border-gray-200 rounded-md shadow-lg z-50"
+        style={{
+          top: position.top,
+          left: position.left,
+        }}
+      >
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">
+            Manage Columns
+          </h3>
+
+          {/* Search input */}
+          <div className="relative mb-4">
+            <Input
+              startIcon={<Search className="h-4 w-4" />}
+              placeholder="Search columns..."
+              value={columnSearchQuery}
+              onChange={(e) => setColumnSearchQuery(e.target.value)}
+              className=""
+              inputSize="sm"
+              variant="default"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1 max-h-64 overflow-y-auto mb-4">
+          {filteredColumns.map((column) => (
+            <div
+              key={column.field}
+              className="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
+              onClick={() => {
+                const newVisibility = {
+                  ...tempColumnVisibility,
+                  [column.field]: !(tempColumnVisibility[column.field] ?? true),
+                };
+                setTempColumnVisibility(newVisibility);
+                // Apply changes immediately
+                setColumnVisibility(newVisibility);
+              }}
+            >
+              <Checkbox
+                checked={tempColumnVisibility[column.field] ?? true}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  const newVisibility = {
+                    ...tempColumnVisibility,
+                    [column.field]: e.target.checked,
+                  };
+                  setTempColumnVisibility(newVisibility);
+                  // Apply changes immediately
+                  setColumnVisibility(newVisibility);
+                }}
+              />
+              <span className="text-sm font-medium text-gray-700 flex-1">
+                {column.headerName}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer with Show/Hide All toggle and Reset */}
+        <div className="flex justify-between items-center pt-4 border-t">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const allVisible = Object.values(tempColumnVisibility).every(
+                (visible) => visible !== false
+              );
+              if (allVisible) {
+                // Hide all
+                const allHidden = columns.reduce(
+                  (acc, col) => ({ ...acc, [col.field]: false }),
+                  {}
+                );
+                setTempColumnVisibility(allHidden);
+                setColumnVisibility(allHidden);
+              } else {
+                // Show all
+                const allVisibleModel = columns.reduce(
+                  (acc, col) => ({ ...acc, [col.field]: true }),
+                  {}
+                );
+                setTempColumnVisibility(allVisibleModel);
+                setColumnVisibility(allVisibleModel);
+              }
+            }}
+          >
+            {Object.values(tempColumnVisibility).every(
+              (visible) => visible !== false
+            )
+              ? 'Hide All'
+              : 'Show All'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const defaultVisibility = columns.reduce(
+                (acc, col) => ({ ...acc, [col.field]: true }),
+                {}
+              );
+              setTempColumnVisibility(defaultVisibility);
+              setColumnVisibility(defaultVisibility);
+              setColumnSearchQuery('');
+            }}
+          >
+            Reset
+          </Button>
+        </div>
+      </div>
+    </>,
+    document.body as HTMLElement
+  );
+};
+
+// ----------------- Filter Popover (hoisted) -----------------
+
+interface FilterPopoverPortalProps {
+  show: boolean;
+  onClose: () => void;
+  popoverRef: React.RefObject<HTMLDivElement>;
+  position: { top: number; left: number };
+
+  filters: FilterRule[];
+  onChangeFilterValue: (id: string, value: string) => void;
+  onChangeFilterField: (id: string, field: string) => void;
+  onChangeFilterOperator: (id: string, op: string) => void;
+  onAddFilter: () => void;
+  onRemoveFilter: (id: string) => void;
+  availableFields: Array<{ field: string; label: string }>;
+  availableOperators: Array<{ value: string; label: string }>;
+
+  setFilterRules: (rules: FilterRule[]) => void;
+  setFilterModel: (model: Record<string, string>) => void;
+  onFilterModelChange?: (rules: FilterRule[]) => void;
+}
+
+const FilterPopoverPortal: React.FC<FilterPopoverPortalProps> = ({
+  show,
+  onClose,
+  popoverRef,
+  position,
+  filters,
+  onChangeFilterValue,
+  onChangeFilterField,
+  onChangeFilterOperator,
+  onAddFilter,
+  onRemoveFilter,
+  availableFields,
+  availableOperators,
+  setFilterRules,
+  setFilterModel,
+  onFilterModelChange,
+}) => {
+  if (!show || typeof window === 'undefined') return null;
+
+  return createPortal(
+    <>
+      {/* Backdrop closes only when clicked directly */}
+      <div
+        className="fixed inset-0 z-40"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+      />
+      <div
+        ref={popoverRef}
+        className="fixed w-[28rem] p-4 bg-white border border-gray-200 rounded-md shadow-lg z-50"
+        style={{ top: position.top, left: position.left }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold">Filters</h3>
+        </div>
+
+        <div className="space-y-3 max-h-72 overflow-auto pr-1">
+          {filters.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-gray-500 py-12 text-center">
+              <Filter className="h-8 w-8 mb-2" />
+              <div className="text-base font-medium">No filters applied</div>
+              <div className="text-sm">
+                Click &quot;Add Filter&quot; to get started
+              </div>
+            </div>
+          ) : (
+            filters.map((f) => (
+              <div
+                key={f.id}
+                className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center"
+              >
+                {/* Field select */}
+                <Select
+                  options={availableFields.map((opt) => ({
+                    value: opt.field,
+                    label: opt.label,
+                  }))}
+                  value={f.field}
+                  onChange={(value) => onChangeFilterField(f.id, value)}
+                  size="sm"
+                  variant="default"
+                  fullWidth
+                />
+
+                {/* Operator select */}
+                <Select
+                  options={availableOperators}
+                  value={f.operator}
+                  onChange={(value) => onChangeFilterOperator(f.id, value)}
+                  size="sm"
+                  variant="default"
+                  fullWidth
+                />
+
+                {/* Value input */}
+                <Input
+                  placeholder="Enter filter value..."
+                  value={f.value ?? ''}
+                  onChange={(e) => onChangeFilterValue(f.id, e.target.value)}
+                  inputSize="sm"
+                  fullWidth
+                  variant="default"
+                />
+
+                {/* Remove button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onRemoveFilter(f.id)}
+                  className="flex items-center justify-center"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="pt-3 mt-3 border-t flex items-center justify-between">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onAddFilter}
+          >
+            Add Filter
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              // Commit the filters (which are tempFilterRules in DataGrid)
+              setFilterRules(filters);
+
+              // Build filter model object for quick filtering
+              const newFilterModel: Record<string, string> = {};
+              filters.forEach((r) => {
+                if (r.operator === 'contains' && r.value) {
+                  newFilterModel[r.field] = r.value;
+                }
+              });
+              setFilterModel(newFilterModel);
+
+              // Notify parent if needed
+              onFilterModelChange?.(filters);
+
+              // Finally close
+              onClose();
+            }}
+          >
+            Done
+          </Button>
+        </div>
+      </div>
+    </>,
+    document.body as HTMLElement
+  );
+};
+
 const DataGrid = forwardRef<GridApiRef, DataGridProps>(
   (
     {
@@ -111,7 +425,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
     const [dragStartWidth, setDragStartWidth] = useState(0);
     const [hoveredColumn, setHoveredColumn] = useState<string | null>(null);
 
-    // Add popover state declarations here
+    // Popover state
     const [showFilterPopover, setShowFilterPopover] = useState(false);
     const [showColumnPopover, setShowColumnPopover] = useState(false);
     const [showExportPopover, setShowExportPopover] = useState(false);
@@ -146,7 +460,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
     const [tempColumnVisibility, setTempColumnVisibility] =
       useState<ColumnVisibility>({});
 
-    // Event listeners
+    // Events
     const eventListeners = useRef<Map<keyof GridEventMap, Set<Function>>>(
       new Map()
     );
@@ -161,7 +475,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
     } | null>(null);
     const [editValue, setEditValue] = useState<string>('');
 
-    // Add the filtered columns memoization here, after the state declarations
+    // Filtered columns (Manage Columns popover)
     const filteredColumns = useMemo(() => {
       if (!columnSearchQuery) return columns;
       return columns.filter(
@@ -173,10 +487,10 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       );
     }, [columns, columnSearchQuery]);
 
-    // API Implementation
+    // API
     const api: GridApiRef = useMemo(
       () => ({
-        // Row methods
+        // ... (unchanged API methods)
         getRow: (id: string | number) => {
           return rows.find((row) => row.id === id) || null;
         },
@@ -195,7 +509,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
           return map;
         },
         setRows: (newRows: GridRowModel[]) => {
-          // This would need to be implemented with a callback to parent
           console.warn('setRows not implemented - use controlled rows prop');
         },
         updateRows: (updates: GridRowModel[]) => {
@@ -238,7 +551,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
           onSelectionModelChange?.(Array.from(newSelection));
         },
         selectRowRange: (range, isSelected = true, resetSelection = false) => {
-          // Implementation for range selection
           console.warn('selectRowRange not fully implemented');
         },
         deselectRow: (id: string | number) => {
@@ -368,7 +680,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
         setQuickFilterValues: (values: string[]) => {
           setSearchQuery(values.join(' '));
         },
-        showFilterPanel: (targetColumnField?: string) => {
+        showFilterPanel: () => {
           setShowFilterPopover(true);
         },
         hideFilterPanel: () => {
@@ -407,12 +719,12 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
         },
 
         // Scroll methods
-        scrollToIndexes: (params) => {
+        scrollToIndexes: () => {
           console.warn('scrollToIndexes not implemented');
           return false;
         },
         getScrollPosition: () => ({ top: 0, left: 0 }),
-        scroll: (params) => {
+        scroll: () => {
           console.warn('scroll not implemented');
         },
 
@@ -455,7 +767,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
           focus: { cell: null, columnHeader: null },
           tabIndex: { cell: null, columnHeader: null },
         }),
-        setState: (stateUpdater) => {
+        setState: () => {
           console.warn('setState not implemented');
         },
         forceUpdate: () => {
@@ -467,7 +779,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
           const row = rows.find((r) => r.id === id);
           return row ? row[field] : null;
         },
-        setCellValue: (id: string | number, field: string, value: any) => {
+        setCellValue: () => {
           console.warn(
             'setCellValue not implemented - use controlled rows prop'
           );
@@ -523,17 +835,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       }
     }, [apiRef, api]);
 
-    // Add this helper function near the top of the component, after the state declarations
-    const getActiveFilterCount = () => {
-      const advancedFilters = filterRules.filter(
-        (rule) => rule.value != null && String(rule.value).trim() !== ''
-      ).length;
-      const columnFilters = Object.values(filterModel).filter(
-        (value) => value != null && String(value).trim() !== ''
-      ).length;
-      return advancedFilters + columnFilters;
-    };
-
     const orderedColumns = useMemo(() => {
       return columnOrder
         .map((fieldName) => columns.find((col) => col.field === fieldName))
@@ -573,6 +874,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       }
     };
 
+    // Processing rows (search + advanced filters + column filters)
     const processedRows = useMemo(() => {
       let filtered = rows;
 
@@ -692,9 +994,11 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       onSortModelChange?.(newSortModel);
     };
 
+    // ----- FILTERS: two-phase (edit temp in popover, commit on Done) -----
+
     const addFilterRule = () => {
-      setTempFilterRules([
-        ...tempFilterRules,
+      setTempFilterRules((prev) => [
+        ...prev,
         {
           id: Math.random().toString(36).substr(2, 9),
           field: columns[0]?.field || '',
@@ -705,20 +1009,18 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
     };
 
     const removeFilterRule = (id: string) => {
-      setTempFilterRules(tempFilterRules.filter((rule) => rule.id !== id));
+      setTempFilterRules((prev) => prev.filter((r) => r.id !== id));
     };
 
     const updateFilterRule = (id: string, updates: Partial<FilterRule>) => {
-      setTempFilterRules(
-        tempFilterRules.map((rule) =>
-          rule.id === id ? { ...rule, ...updates } : rule
-        )
+      setTempFilterRules((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, ...updates } : r))
       );
     };
 
     const handleSelectAll = (checked: boolean) => {
       if (checked) {
-        const allIds = rows.map((row) => String(row.id)); // Use all rows, not just paginatedRows
+        const allIds = rows.map((row) => String(row.id));
         setSelectedRows(allIds);
         onSelectionModelChange?.(allIds);
       } else {
@@ -743,7 +1045,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', columnField);
 
-      // Create drag image
       const dragImage = e.currentTarget.cloneNode(true) as HTMLElement;
       dragImage.style.opacity = '0.8';
       dragImage.style.transform = 'rotate(2deg)';
@@ -766,7 +1067,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
         const sourceIndex = newOrder.indexOf(sourceField);
         const targetIndex = newOrder.indexOf(targetField);
 
-        // Remove source and insert at target position
         newOrder.splice(sourceIndex, 1);
         newOrder.splice(targetIndex, 0, sourceField);
 
@@ -823,48 +1123,16 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       }
     }, [isResizing, handleResizeMove, handleResizeEnd]);
 
+    // Align filter popover: top-right of popover under button (28rem = 448px)
     useEffect(() => {
-      if (showFilterPopover) {
-        // Keep temp filter rules in sync with column filters
-        const syncedRules = [...tempFilterRules];
-        let hasChanges = false;
-
-        Object.entries(filterModel).forEach(([field, value]) => {
-          const existingRuleIndex = syncedRules.findIndex(
-            (rule) => rule.field === field && rule.operator === 'contains'
-          );
-
-          if (value) {
-            if (existingRuleIndex >= 0) {
-              if (syncedRules[existingRuleIndex].value !== value) {
-                syncedRules[existingRuleIndex] = {
-                  ...syncedRules[existingRuleIndex],
-                  value,
-                };
-                hasChanges = true;
-              }
-            } else {
-              syncedRules.push({
-                id: Math.random().toString(36).substr(2, 9),
-                field,
-                operator: 'contains',
-                value,
-              });
-              hasChanges = true;
-            }
-          } else {
-            if (existingRuleIndex >= 0) {
-              syncedRules.splice(existingRuleIndex, 1);
-              hasChanges = true;
-            }
-          }
+      if (showFilterPopover && filterButtonRef.current) {
+        const rect = filterButtonRef.current.getBoundingClientRect();
+        setFilterPopoverPosition({
+          top: rect.bottom + 4,
+          left: rect.right - 448, // match w-[28rem]
         });
-
-        if (hasChanges) {
-          setTempFilterRules(syncedRules);
-        }
       }
-    }, [filterModel, showFilterPopover]);
+    }, [showFilterPopover]);
 
     useEffect(() => {
       if (showExportPopover && exportButtonRef.current) {
@@ -875,16 +1143,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
         });
       }
     }, [showExportPopover]);
-
-    useEffect(() => {
-      if (showFilterPopover && filterButtonRef.current) {
-        const rect = filterButtonRef.current.getBoundingClientRect();
-        setFilterPopoverPosition({
-          top: rect.bottom + 4,
-          left: rect.right - 500, // 500px = w-[500px]
-        });
-      }
-    }, [showFilterPopover]);
 
     useEffect(() => {
       if (showColumnPopover && columnButtonRef.current) {
@@ -900,7 +1158,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       if (!showExportPopover) return;
 
       const handleScroll = (event: Event) => {
-        // Don't close if scrolling inside the popover
         if (
           exportPopoverRef.current &&
           exportPopoverRef.current.contains(event.target as Node)
@@ -916,31 +1173,12 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       };
     }, [showExportPopover]);
 
-    useEffect(() => {
-      if (!showFilterPopover) return;
-
-      const handleScroll = (event: Event) => {
-        // Don't close if scrolling inside the popover
-        if (
-          filterPopoverRef.current &&
-          filterPopoverRef.current.contains(event.target as Node)
-        ) {
-          return;
-        }
-        setShowFilterPopover(false);
-      };
-
-      window.addEventListener('scroll', handleScroll, true);
-      return () => {
-        window.removeEventListener('scroll', handleScroll, true);
-      };
-    }, [showFilterPopover]);
+    // NOTE: intentionally no "close on scroll" effect for filter popover to keep dropdowns stable
 
     useEffect(() => {
       if (!showColumnPopover) return;
 
       const handleScroll = (event: Event) => {
-        // Don't close if scrolling inside the popover
         if (
           columnPopoverRef.current &&
           columnPopoverRef.current.contains(event.target as Node)
@@ -1000,294 +1238,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
             </div>
           </div>
         </>,
-        document.body
-      );
-    };
-
-    const FilterPopoverPortal = () => {
-      if (!showFilterPopover || typeof window === 'undefined') return null;
-      return createPortal(
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setShowFilterPopover(false)}
-          />
-          <div
-            ref={filterPopoverRef}
-            className="fixed w-[500px] p-4 bg-white border border-gray-200 rounded-md shadow-lg z-50 overflow-visible"
-            style={{
-              top: filterPopoverPosition.top,
-              left: filterPopoverPosition.left,
-            }}
-          >
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Advanced Filters
-              </h3>
-            </div>
-
-            <div className="space-y-4 max-h-80 overflow-y-auto">
-              {tempFilterRules.map((rule) => (
-                <div
-                  key={rule.id}
-                  className="flex items-center gap-2 p-3 border rounded-lg"
-                >
-                  <div className="min-w-[120px] flex-shrink-0">
-                    <Select
-                      options={columns.map((col) => ({
-                        value: col.field,
-                        label: col.headerName,
-                      }))}
-                      value={rule.field}
-                      onChange={(value) => {
-                        updateFilterRule(rule.id, { field: value });
-                        // Apply changes immediately
-                        const updatedRules = tempFilterRules.map((r) =>
-                          r.id === rule.id ? { ...r, field: value } : r
-                        );
-                        setFilterRules(updatedRules);
-                        const newFilterModel: Record<string, string> = {};
-                        updatedRules.forEach((r) => {
-                          if (r.operator === 'contains' && r.value) {
-                            newFilterModel[r.field] = r.value;
-                          }
-                        });
-                        setFilterModel(newFilterModel);
-                        onFilterModelChange?.(updatedRules);
-                      }}
-                      placeholder="Select field"
-                      size="sm"
-                      className="z-[10001]"
-                    />
-                  </div>
-
-                  <div className="min-w-[100px] flex-shrink-0">
-                    <Select
-                      options={[
-                        { value: 'contains', label: 'Contains' },
-                        { value: 'equals', label: 'Equals' },
-                        { value: 'startsWith', label: 'Starts with' },
-                        { value: 'endsWith', label: 'Ends with' },
-                        { value: 'isEmpty', label: 'Is empty' },
-                        { value: 'isNotEmpty', label: 'Is not empty' },
-                      ]}
-                      value={rule.operator}
-                      onChange={(value) => {
-                        updateFilterRule(rule.id, { operator: value as any });
-                        // Apply changes immediately
-                        const updatedRules = tempFilterRules.map((r) =>
-                          r.id === rule.id
-                            ? { ...r, operator: value as any }
-                            : r
-                        );
-                        setFilterRules(updatedRules);
-                        const newFilterModel: Record<string, string> = {};
-                        updatedRules.forEach((r) => {
-                          if (r.operator === 'contains' && r.value) {
-                            newFilterModel[r.field] = r.value;
-                          }
-                        });
-                        setFilterModel(newFilterModel);
-                        onFilterModelChange?.(updatedRules);
-                      }}
-                      size="sm"
-                      className="z-[10001]"
-                    />
-                  </div>
-
-                  <div className="flex-1 min-w-0 fullWidth">
-                    <Input
-                      placeholder="Enter filter value..."
-                      value={rule.value}
-                      onChange={(e) => {
-                        updateFilterRule(rule.id, { value: e.target.value });
-                        // Apply changes immediately with debouncing
-                        const updatedRules = tempFilterRules.map((r) =>
-                          r.id === rule.id ? { ...r, value: e.target.value } : r
-                        );
-                        setFilterRules(updatedRules);
-                        const newFilterModel: Record<string, string> = {};
-                        updatedRules.forEach((r) => {
-                          if (r.operator === 'contains' && r.value) {
-                            newFilterModel[r.field] = r.value;
-                          }
-                        });
-                        setFilterModel(newFilterModel);
-                        onFilterModelChange?.(updatedRules);
-                      }}
-                      inputSize="sm"
-                      fullWidth={true}
-                    />
-                  </div>
-
-                  <div className="flex-shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        removeFilterRule(rule.id);
-                        // Apply changes immediately
-                        const updatedRules = tempFilterRules.filter(
-                          (r) => r.id !== rule.id
-                        );
-                        setFilterRules(updatedRules);
-                        const newFilterModel: Record<string, string> = {};
-                        updatedRules.forEach((r) => {
-                          if (r.operator === 'contains' && r.value) {
-                            newFilterModel[r.field] = r.value;
-                          }
-                        });
-                        setFilterModel(newFilterModel);
-                        onFilterModelChange?.(updatedRules);
-                      }}
-                    >
-                      <X />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={addFilterRule}
-                className="w-full bg-transparent"
-              >
-                <Plus />
-                <span className="ml-2">Add Filter</span>
-              </Button>
-            </div>
-          </div>
-        </>,
-        document.body
-      );
-    };
-
-    const ColumnPopoverPortal = () => {
-      if (!showColumnPopover || typeof window === 'undefined') return null;
-      return createPortal(
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setShowColumnPopover(false)}
-          />
-          <div
-            ref={columnPopoverRef}
-            className="fixed w-80 p-4 bg-white border border-gray-200 rounded-md shadow-lg z-50"
-            style={{
-              top: columnPopoverPosition.top,
-              left: columnPopoverPosition.left,
-            }}
-          >
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                Manage Columns
-              </h3>
-
-              {/* Search input */}
-              <div className="relative mb-4">
-                <Input
-                  startIcon={<Search className="h-4 w-4" />}
-                  placeholder="Search columns..."
-                  value={columnSearchQuery}
-                  onChange={(e) => setColumnSearchQuery(e.target.value)}
-                  className=""
-                  inputSize="sm"
-                  variant="default"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1 max-h-64 overflow-y-auto mb-4">
-              {filteredColumns.map((column) => (
-                <div
-                  key={column.field}
-                  className="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => {
-                    const newVisibility = {
-                      ...tempColumnVisibility,
-                      [column.field]: !(
-                        tempColumnVisibility[column.field] ?? true
-                      ),
-                    };
-                    setTempColumnVisibility(newVisibility);
-                    // Apply changes immediately
-                    setColumnVisibility(newVisibility);
-                  }}
-                >
-                  <Checkbox
-                    checked={tempColumnVisibility[column.field] ?? true}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      const newVisibility = {
-                        ...tempColumnVisibility,
-                        [column.field]: e.target.checked,
-                      };
-                      setTempColumnVisibility(newVisibility);
-                      // Apply changes immediately
-                      setColumnVisibility(newVisibility);
-                    }}
-                  />
-                  <span className="text-sm font-medium text-gray-700 flex-1">
-                    {column.headerName}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* Footer with Show/Hide All toggle and Reset */}
-            <div className="flex justify-between items-center pt-4 border-t">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const allVisible = Object.values(tempColumnVisibility).every(
-                    (visible) => visible !== false
-                  );
-                  if (allVisible) {
-                    // Hide all
-                    const allHidden = columns.reduce(
-                      (acc, col) => ({ ...acc, [col.field]: false }),
-                      {}
-                    );
-                    setTempColumnVisibility(allHidden);
-                    setColumnVisibility(allHidden);
-                  } else {
-                    // Show all
-                    const allVisible = columns.reduce(
-                      (acc, col) => ({ ...acc, [col.field]: true }),
-                      {}
-                    );
-                    setTempColumnVisibility(allVisible);
-                    setColumnVisibility(allVisible);
-                  }
-                }}
-              >
-                {Object.values(tempColumnVisibility).every(
-                  (visible) => visible !== false
-                )
-                  ? 'Hide All'
-                  : 'Show All'}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const defaultVisibility = columns.reduce(
-                    (acc, col) => ({ ...acc, [col.field]: true }),
-                    {}
-                  );
-                  setTempColumnVisibility(defaultVisibility);
-                  setColumnVisibility(defaultVisibility);
-                  setColumnSearchQuery('');
-                }}
-              >
-                Reset
-              </Button>
-            </div>
-          </div>
-        </>,
-        document.body
+        document.body as HTMLElement
       );
     };
 
@@ -1434,7 +1385,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
     const handleRowClick = (row: any, event: React.MouseEvent) => {
       if (!checkboxSelectionOnRowClick || !checkboxSelection) return;
 
-      // Don't trigger if clicking on checkbox, button, or input elements
       const target = event.target as HTMLElement;
       if (
         (target instanceof HTMLInputElement && target.type === 'checkbox') ||
@@ -1452,6 +1402,52 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
       setSelectedRows(newSelection);
       onSelectionModelChange?.(newSelection);
     };
+
+    // ---------- Badge count (dedup across advanced + column filters) ----------
+
+    const isValueLessOperator = (op: FilterRule['operator']) =>
+      op === 'isEmpty' || op === 'isNotEmpty';
+
+    const isRuleActive = (r: FilterRule) =>
+      isValueLessOperator(r.operator) || String(r.value ?? '').trim() !== '';
+
+    const ruleKey = (r: {
+      field: string;
+      operator: FilterRule['operator'];
+      value?: string;
+    }) => {
+      const val = String(r.value ?? '').trim();
+      return isValueLessOperator(r.operator)
+        ? `${r.field}|${r.operator}`
+        : `${r.field}|${r.operator}|${val}`;
+    };
+
+    const getFilterBadgeCount = () => {
+      const sourceRules = showFilterPopover ? tempFilterRules : filterRules;
+
+      const activeAdvanced = sourceRules.filter(isRuleActive);
+      const keys = new Set(activeAdvanced.map(ruleKey));
+
+      if (enableColumnFilters) {
+        for (const [field, rawVal] of Object.entries(filterModel)) {
+          const value = String(rawVal ?? '').trim();
+          if (!value) continue;
+          const k = ruleKey({ field, operator: 'contains', value });
+          if (!keys.has(k)) keys.add(k);
+        }
+      }
+
+      return keys.size;
+    };
+
+    const badgeCount = getFilterBadgeCount();
+
+    // ----- Seed temp rules on popover open (committed rules only) -----
+    useEffect(() => {
+      if (showFilterPopover) {
+        setTempFilterRules(filterRules);
+      }
+    }, [showFilterPopover, filterRules]);
 
     return (
       <div className={cn('border rounded-lg bg-white', className)}>
@@ -1484,13 +1480,57 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                     variant="outline"
                     size="sm"
                     onClick={() => setShowFilterPopover(!showFilterPopover)}
+                    className="relative"
                   >
                     <Filter className="h-4 w-4" />
                     {!hideFilterLabel && (
                       <span className="ml-2 hidden md:inline">Filters</span>
                     )}
+
+                    {badgeCount > 0 && (
+                      <span
+                        className="ml-2 inline-flex items-center justify-center
+                  px-1.5 py-0.5 text-xs font-medium
+                  bg-blue-100 text-blue-700 rounded-full"
+                      >
+                        {badgeCount}
+                      </span>
+                    )}
                   </Button>
-                  <FilterPopoverPortal />
+
+                  <FilterPopoverPortal
+                    show={showFilterPopover}
+                    onClose={() => setShowFilterPopover(false)}
+                    popoverRef={filterPopoverRef}
+                    position={filterPopoverPosition}
+                    filters={tempFilterRules}
+                    onChangeFilterValue={(id, value) =>
+                      updateFilterRule(id, { value })
+                    }
+                    onChangeFilterField={(id, field) =>
+                      updateFilterRule(id, { field })
+                    }
+                    onChangeFilterOperator={(id, op) =>
+                      updateFilterRule(id, { operator: op as any })
+                    }
+                    onAddFilter={addFilterRule}
+                    onRemoveFilter={removeFilterRule}
+                    availableFields={columns.map((c) => ({
+                      field: c.field,
+                      label: c.headerName,
+                    }))}
+                    availableOperators={[
+                      { value: 'contains', label: 'Contains' },
+                      { value: 'equals', label: 'Equals' },
+                      { value: 'startsWith', label: 'Starts with' },
+                      { value: 'endsWith', label: 'Ends with' },
+                      { value: 'isEmpty', label: 'Is empty' },
+                      { value: 'isNotEmpty', label: 'Is not empty' },
+                    ]}
+                    setFilterRules={setFilterRules}
+                    setFilterModel={setFilterModel}
+                    onFilterModelChange={onFilterModelChange}
+                  />
                 </div>
               )}
 
@@ -1527,7 +1567,19 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                       <span className="ml-2 hidden md:inline">Columns</span>
                     )}
                   </Button>
-                  <ColumnPopoverPortal />
+                  <ColumnPopoverPortal
+                    show={showColumnPopover}
+                    onClose={() => setShowColumnPopover(false)}
+                    columnPopoverRef={columnPopoverRef}
+                    position={columnPopoverPosition}
+                    columnSearchQuery={columnSearchQuery}
+                    setColumnSearchQuery={setColumnSearchQuery}
+                    filteredColumns={filteredColumns}
+                    tempColumnVisibility={tempColumnVisibility}
+                    setTempColumnVisibility={setTempColumnVisibility}
+                    setColumnVisibility={setColumnVisibility}
+                    columns={columns}
+                  />
                 </div>
               )}
             </div>
@@ -1539,6 +1591,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
           <table
             className={`w-full ${getDensityClasses()}`}
             style={{ minWidth: 'max-content' }}
+            ref={tableRef}
           >
             <thead className="bg-gray-50 border-b-2">
               <tr>
@@ -1666,12 +1719,18 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                           value={filterModel[column.field] || ''}
                           onChange={(e) => {
                             const newValue = e.target.value;
-                            setFilterModel((prev) => ({
-                              ...prev,
-                              [column.field]: newValue,
-                            }));
+                            // Update column filter model
+                            setFilterModel((prev) => {
+                              const next = { ...prev };
+                              if (newValue && newValue.trim() !== '') {
+                                next[column.field] = newValue;
+                              } else {
+                                delete next[column.field];
+                              }
+                              return next;
+                            });
 
-                            // Sync with filter rules
+                            // Sync with committed filter rules (contains)
                             setFilterRules((prevRules) => {
                               const existingRuleIndex = prevRules.findIndex(
                                 (rule) =>
@@ -1679,9 +1738,8 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                                   rule.operator === 'contains'
                               );
 
-                              if (newValue) {
+                              if (newValue && newValue.trim() !== '') {
                                 if (existingRuleIndex >= 0) {
-                                  // Update existing rule
                                   const newRules = [...prevRules];
                                   newRules[existingRuleIndex] = {
                                     ...newRules[existingRuleIndex],
@@ -1689,7 +1747,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                                   };
                                   return newRules;
                                 } else {
-                                  // Add new rule
                                   return [
                                     ...prevRules,
                                     {
@@ -1703,7 +1760,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                                   ];
                                 }
                               } else {
-                                // Remove rule if value is empty
                                 if (existingRuleIndex >= 0) {
                                   return prevRules.filter(
                                     (_, index) => index !== existingRuleIndex
@@ -1763,7 +1819,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>(
                   </td>
                 </tr>
               ) : (
-                paginatedRows.map((row, index) => (
+                paginatedRows.map((row) => (
                   <tr
                     key={row.id}
                     className={`border-b border-gray-200 hover:bg-gray-50 ${
