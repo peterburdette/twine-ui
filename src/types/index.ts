@@ -1,15 +1,20 @@
 import type React from 'react';
 import type { GridRenderCellParams, GridValueGetterParams } from './api';
 
-export interface Column {
+export interface GridColDef {
   field: string;
   headerName: string;
   width?: number;
   sortable?: boolean;
   align?: 'left' | 'center' | 'right';
+  type?: 'string' | 'number' | 'boolean' | 'date' | 'actions';
   editable?: boolean;
   renderCell?: (params: GridRenderCellParams) => React.ReactNode;
   valueGetter?: (params: GridValueGetterParams) => any;
+}
+
+export interface Column extends Omit<GridColDef, 'type'> {
+  type?: GridColDef['type'];
 }
 
 export interface SortModel {

@@ -10,22 +10,9 @@ import {
   useImperativeHandle,
   forwardRef,
 } from 'react';
-import {
-  Search,
-  Filter as FilterIcon,
-  Download,
-  Settings,
-  ChevronUp,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-} from 'lucide-react';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 import { Input } from '../ui/Input/Input';
 import { Checkbox } from '../ui/Checkbox/Checkbox';
-import { Select } from '../ui/Select/Select';
-import { Button } from '../ui/Button/Button';
 import { cn } from '../../lib/utils';
 import { GridExportUtils } from '../../utils/gridExport';
 import type {
@@ -39,19 +26,35 @@ import type {
   GridRowModel,
   GridState,
   GridFilterModel,
-  GridPaginationModel,
   GridSortItem,
   GridEventMap,
 } from '../../types/api';
-import type { Column } from '../../types';
-
-import FilterPopoverPortal from './_components/FilterPopoverPortal';
-import ColumnPopoverPortal from './_components/ColumnPopoverPortal';
-import ExportPopoverPortal from './_components/ExportPopoverPortal';
-
-/** NEW: toolbar & footer component imports */
+import type { Column, GridColDef } from '../../types';
 import DataGridToolbar from './_components/DataGridToolbar';
 import DataGridFooter from './_components/DataGridFooter';
+
+// Normalizes Column['type'] to GridColDef['type']
+const normalizeGridType = (t: Column['type']): GridColDef['type'] => {
+  switch (t) {
+    case undefined:
+    case 'string':
+    case 'number':
+    case 'boolean':
+    case 'date':
+    case 'actions':
+      return t as GridColDef['type'];
+    default:
+      // any custom/unknown string → treat as 'string'
+      return 'string';
+  }
+};
+
+// Convert your Column to a GridColDef for API returns
+const toGridColDef = (col: Column): GridColDef =>
+  ({
+    ...col,
+    type: normalizeGridType(col.type),
+  } as GridColDef);
 
 const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
   const {
@@ -80,7 +83,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     enableColumnFilters = false,
     noDataMessage = 'No data available',
     apiRef,
-    isEditable = false,
     onCellValueChange,
     checkboxSelectionOnRowClick = false,
     onRowsChange,
@@ -162,7 +164,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     rowId: string | number;
     field: string;
   } | null>(null);
-  const [editValue, setEditValue] = useState<string>('');
+  const [editValue, setEditValue] = useState<any>(null); // preserve type during editing
 
   // Filtered columns (Manage Columns popover)
   const filteredColumns = useMemo(() => {
@@ -252,10 +254,15 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
       },
 
       // Column methods
-      getColumn: (field) => columns.find((col) => col.field === field) || null,
-      getAllColumns: () => columns,
+      getColumn: (field) => {
+        const col = columns.find((c) => c.field === field);
+        return col ? toGridColDef(col) : null;
+      },
+      getAllColumns: () => columns.map(toGridColDef),
       getVisibleColumns: () =>
-        orderedColumns.filter((col) => columnVisibility[col.field]),
+        orderedColumns
+          .filter((col) => columnVisibility[col.field] !== false)
+          .map(toGridColDef),
       getColumnIndex: (field, useVisibleColumns = false) => {
         const cols = useVisibleColumns ? api.getVisibleColumns() : columns;
         return cols.findIndex((col) => col.field === field);
@@ -378,7 +385,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
         columns: {
           all: columns.map((col) => col.field),
           visible: orderedColumns
-            .filter((col) => columnVisibility[col.field])
+            .filter((col) => columnVisibility[col.field] !== false)
             .map((col) => col.field),
           columnVisibilityModel: columnVisibility,
           dimensions: columnWidths as any,
@@ -740,31 +747,59 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     field: string,
     currentValue: any
   ) => {
-    if (!isEditable) return;
+    // Per-column editing only: editable must be true and no valueGetter
+    const col = columns.find((c) => c.field === field);
+    if (!col || col.editable !== true || col.valueGetter) return;
     setEditingCell({ rowId, field });
-    setEditValue(String(currentValue || ''));
+    setEditValue(currentValue);
   };
+
   const handleEditSave = () => {
     if (!editingCell) return;
+    const { rowId, field } = editingCell;
+    const col = columns.find((c) => c.field === field);
+
+    let finalValue = editValue;
+
+    // Coerce by column.type
+    const t = (col?.type as string | undefined) ?? 'string';
+    if (t === 'number') {
+      if (
+        finalValue === '' ||
+        finalValue === null ||
+        finalValue === undefined
+      ) {
+        finalValue = null;
+      } else {
+        const n = Number(finalValue);
+        finalValue = Number.isNaN(n) ? null : n;
+      }
+    } else if (t === 'boolean') {
+      finalValue = Boolean(finalValue);
+    } else {
+      // string default
+      finalValue = String(finalValue ?? '');
+    }
+
     const updatedRows = rows.map((row) =>
-      (row as any).id === editingCell.rowId
-        ? { ...(row as any), [editingCell.field]: editValue }
-        : row
+      (row as any).id === rowId ? { ...(row as any), [field]: finalValue } : row
     );
     setRows(updatedRows);
     onCellValueChange?.({
-      id: editingCell.rowId,
-      field: editingCell.field,
-      value: editValue,
+      id: rowId,
+      field,
+      value: finalValue,
     });
     onRowsChange?.(updatedRows);
     setEditingCell(null);
-    setEditValue('');
+    setEditValue(null);
   };
+
   const handleEditCancel = () => {
     setEditingCell(null);
-    setEditValue('');
+    setEditValue(null);
   };
+
   const handleEditKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -773,6 +808,55 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
       e.preventDefault();
       handleEditCancel();
     }
+  };
+
+  const renderEditor = (column: Column) => {
+    const t = (column.type as string | undefined) ?? 'string';
+
+    if (t === 'boolean') {
+      return (
+        <div className="w-full h-full flex items-center justify-center">
+          <input
+            type="checkbox"
+            checked={Boolean(editValue)}
+            onChange={(e) => setEditValue(e.target.checked)}
+            onKeyDown={handleEditKeyDown}
+            onBlur={handleEditSave}
+            className="m-0 p-0"
+            autoFocus
+          />
+        </div>
+      );
+    }
+
+    if (t === 'number') {
+      return (
+        <input
+          type="number"
+          value={editValue ?? ''}
+          onChange={(e) =>
+            setEditValue(e.target.value === '' ? '' : Number(e.target.value))
+          }
+          onKeyDown={handleEditKeyDown}
+          onBlur={handleEditSave}
+          className="w-full h-full m-0 p-0 border-none outline-none focus:outline-none focus:ring-0 bg-transparent block"
+          autoFocus
+        />
+      );
+    }
+
+    // default string
+    return (
+      <input
+        type="text"
+        value={editValue ?? ''}
+        onChange={(e) => setEditValue(e.target.value)}
+        onKeyDown={handleEditKeyDown}
+        onBlur={handleEditSave}
+        className="w-full h-full m-0 p-0 border-none outline-none focus:outline-none focus:ring-0 bg-transparent block"
+        autoFocus
+      />
+    );
   };
 
   const renderCell = (row: any, column: Column) => {
@@ -787,23 +871,21 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
         })
       : (row as any)[column.field];
 
-    const isCellEditable =
-      isEditable && column.editable !== false && !column.valueGetter;
+    const isCellEditable = column.editable === true && !column.valueGetter;
     const isCurrentlyEditing =
       editingCell?.rowId === (row as any).id &&
       editingCell?.field === column.field;
 
     if (isCurrentlyEditing) {
       return (
-        <input
-          type="text"
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={handleEditKeyDown}
-          onBlur={handleEditSave}
-          className="w-full h-full px-2 py-1 border-2 border-blue-500 rounded focus:outline-none"
-          autoFocus
-        />
+        <div
+          className={cn(
+            'absolute inset-0 ring-2 ring-inset ring-blue-500/60 bg-blue-50/40 rounded-sm',
+            getCellPadding()
+          )}
+        >
+          {renderEditor(column)}
+        </div>
       );
     }
 
@@ -827,7 +909,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
         onDoubleClick={() => {
           if (isCellEditable) {
             setEditingCell({ rowId: (row as any).id, field: column.field });
-            setEditValue(String(value || ''));
+            setEditValue(value);
           }
         }}
       >
@@ -892,10 +974,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
 
   return (
     <div className={cn('border rounded-lg bg-white', className)}>
-      {/* TOOLBAR MOVED */}
+      {/* TOOLBAR */}
       {!hideToolbar && (
         <DataGridToolbar
-          /* visibility flags */
           hideSearch={hideSearch}
           hideFilters={hideFilters}
           hideExport={hideExport}
@@ -903,21 +984,16 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
           hideFilterLabel={hideFilterLabel}
           hideExportLabel={hideExportLabel}
           hideColumnsLabel={hideColumnsLabel}
-          /* search */
           searchQuery={searchQuery}
-          onSearchChange={setSearchQuery} // was setSearchQuery={...}
-          /* badge */
+          onSearchChange={setSearchQuery}
           badgeCount={badgeCount}
-          /* filter popover wiring */
           showFilterPopover={showFilterPopover}
           setShowFilterPopover={setShowFilterPopover}
           filterButtonRef={filterButtonRef}
           filterPopoverRef={filterPopoverRef}
           filterPopoverPosition={filterPopoverPosition}
-          /* temp/committed rules */
           tempFilterRules={tempFilterRules}
           committedFilters={filterRules}
-          /* the toolbar expects granular handlers instead of updateFilterRule */
           onChangeFilterValue={(id, v) => updateFilterRule(id, { value: v })}
           onChangeFilterField={(id, field) => updateFilterRule(id, { field })}
           onChangeFilterOperator={(id, op) =>
@@ -929,12 +1005,10 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
           setFilterRules={setFilterRules}
           setFilterModel={setFilterModel}
           onFilterModelChange={onFilterModelChange}
-          /* provide availableFields from your columns */
           availableFields={columns.map((c) => ({
             field: c.field,
             label: c.headerName ?? c.field,
           }))}
-          /* export popover wiring */
           showExportPopover={showExportPopover}
           setShowExportPopover={setShowExportPopover}
           exportButtonRef={exportButtonRef}
@@ -942,7 +1016,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
           exportPopoverPosition={exportPopoverPosition}
           onExportCsv={() => api.exportDataAsCsv()}
           onExportJson={() => api.exportDataAsJson()}
-          /* columns popover wiring */
           showColumnPopover={showColumnPopover}
           setShowColumnPopover={setShowColumnPopover}
           columnButtonRef={columnButtonRef}
@@ -968,8 +1041,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
           <thead className="bg-gray-50 border-b-2">
             <tr>
               {checkboxSelection &&
-                orderedColumns.filter((col) => columnVisibility[col.field])
-                  .length > 0 && (
+                orderedColumns.filter(
+                  (col) => columnVisibility[col.field] !== false
+                ).length > 0 && (
                   <th
                     className={`w-12 ${getHeaderPadding()} text-center border-r last:border-r-0`}
                   >
@@ -990,7 +1064,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                   </th>
                 )}
               {orderedColumns
-                .filter((col) => columnVisibility[col.field])
+                .filter((col) => columnVisibility[col.field] !== false)
                 .map((column) => (
                   <th
                     key={column.field}
@@ -1073,10 +1147,11 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
             {enableColumnFilters && (
               <tr className="bg-gray-50 border-b">
                 {checkboxSelection &&
-                  orderedColumns.filter((col) => columnVisibility[col.field])
-                    .length > 0 && <td className="w-12 p-2 border-r" />}
+                  orderedColumns.filter(
+                    (col) => columnVisibility[col.field] !== false
+                  ).length > 0 && <td className="w-12 p-2 border-r" />}
                 {orderedColumns
-                  .filter((col) => columnVisibility[col.field])
+                  .filter((col) => columnVisibility[col.field] !== false)
                   .map((column) => (
                     <td
                       key={`filter-${column.field}`}
@@ -1140,8 +1215,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                   ))}
               </tr>
             )}
-            {orderedColumns.filter((col) => columnVisibility[col.field])
-              .length === 0 ? (
+            {orderedColumns.filter(
+              (col) => columnVisibility[col.field] !== false
+            ).length === 0 ? (
               <tr>
                 <td
                   colSpan={columns.length + (checkboxSelection ? 1 : 0)}
@@ -1159,11 +1235,13 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
               <tr>
                 <td
                   colSpan={
-                    orderedColumns.filter((col) => columnVisibility[col.field])
-                      .length +
+                    orderedColumns.filter(
+                      (col) => columnVisibility[col.field] !== false
+                    ).length +
                     (checkboxSelection &&
-                    orderedColumns.filter((col) => columnVisibility[col.field])
-                      .length > 0
+                    orderedColumns.filter(
+                      (col) => columnVisibility[col.field] !== false
+                    ).length > 0
                       ? 1
                       : 0)
                   }
@@ -1214,8 +1292,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                   }}
                 >
                   {checkboxSelection &&
-                    orderedColumns.filter((col) => columnVisibility[col.field])
-                      .length > 0 && (
+                    orderedColumns.filter(
+                      (col) => columnVisibility[col.field] !== false
+                    ).length > 0 && (
                       <td
                         className={`${getCellPadding()} ${
                           !hideGridLines ? 'border-r' : ''
@@ -1241,88 +1320,40 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                       </td>
                     )}
                   {orderedColumns
-                    .filter((col) => columnVisibility[col.field])
-                    .map((column) => (
-                      <td
-                        key={column.field}
-                        className={`${getCellPadding()} ${
-                          !hideGridLines ? 'border-r last:border-r-0' : ''
-                        } truncate ${
-                          column.align === 'center'
-                            ? 'text-center'
-                            : column.align === 'right'
-                            ? 'text-right'
-                            : 'text-left'
-                        }`}
-                        style={{
-                          width:
-                            columnWidths[column.field] || column.width || 150,
-                        }}
-                        onDoubleClick={() =>
-                          handleCellDoubleClick(
-                            (row as any).id,
-                            column.field,
-                            (row as any)[column.field]
-                          )
-                        }
-                      >
-                        {(() => {
-                          const value = column.valueGetter
-                            ? column.valueGetter({
-                                id: (row as any)[idField],
-                                row,
-                                field: column.field,
-                                value: (row as any)[column.field],
-                                colDef: column,
-                                api,
-                              })
-                            : (row as any)[column.field];
-                          const isCellEditable =
-                            isEditable &&
-                            column.editable !== false &&
-                            !column.valueGetter;
-                          const isCurrentlyEditing =
-                            editingCell?.rowId === (row as any).id &&
-                            editingCell?.field === column.field;
-                          if (isCurrentlyEditing) {
-                            return (
-                              <input
-                                type="text"
-                                value={editValue}
-                                onChange={(e) => setEditValue(e.target.value)}
-                                onKeyDown={handleEditKeyDown}
-                                onBlur={handleEditSave}
-                                className="w-full h-full px-2 py-1 border-2 border-blue-500 rounded focus:outline-none"
-                                autoFocus
-                              />
-                            );
+                    .filter((col) => columnVisibility[col.field] !== false)
+                    .map((column) => {
+                      const isEditingCell =
+                        editingCell?.rowId === (row as any).id &&
+                        editingCell?.field === column.field;
+
+                      return (
+                        <td
+                          key={column.field}
+                          className={`${getCellPadding()} ${
+                            !hideGridLines ? 'border-r last:border-r-0' : ''
+                          } truncate ${
+                            column.align === 'center'
+                              ? 'text-center'
+                              : column.align === 'right'
+                              ? 'text-right'
+                              : 'text-left'
+                          } relative`}
+                          style={{
+                            width:
+                              columnWidths[column.field] || column.width || 150,
+                          }}
+                          onDoubleClick={() =>
+                            handleCellDoubleClick(
+                              (row as any).id,
+                              column.field,
+                              (row as any)[column.field]
+                            )
                           }
-                          if (column.renderCell) {
-                            return column.renderCell({
-                              id: (row as any)[idField],
-                              value,
-                              row,
-                              field: column.field,
-                              colDef: column,
-                              cellMode: 'view',
-                              hasFocus: false,
-                              tabIndex: 0,
-                              api,
-                            });
-                          }
-                          return (
-                            <div
-                              className={cn(
-                                'truncate',
-                                isCellEditable && 'cursor-text'
-                              )}
-                            >
-                              {String(value ?? '')}
-                            </div>
-                          );
-                        })()}
-                      </td>
-                    ))}
+                        >
+                          {renderCell(row, column)}
+                        </td>
+                      );
+                    })}
                 </tr>
               ))
             )}
