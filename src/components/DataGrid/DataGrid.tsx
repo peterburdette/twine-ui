@@ -582,6 +582,10 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     onSortModelChange?.(newSortModel);
   };
 
+  // Match editor font-size to grid density so text doesn't grow/shrink on edit
+  const editorInputSize =
+    density === 'compact' ? 'xs' : density === 'comfortable' ? 'md' : 'sm';
+
   /* Filter editing (temp) */
   const addFilterRule = () => {
     setTempFilterRules((prev) => [
@@ -812,49 +816,65 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
 
   const renderEditor = (column: Column) => {
     const t = (column.type as string | undefined) ?? 'string';
+    const align =
+      column.align === 'center'
+        ? 'text-center'
+        : column.align === 'right'
+        ? 'text-right'
+        : 'text-left';
 
+    // boolean → Checkbox centered in the cell
     if (t === 'boolean') {
       return (
         <div className="w-full h-full flex items-center justify-center">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={Boolean(editValue)}
             onChange={(e) => setEditValue(e.target.checked)}
             onKeyDown={handleEditKeyDown}
             onBlur={handleEditSave}
-            className="m-0 p-0"
-            autoFocus
           />
         </div>
       );
     }
 
+    // common props for Input (string/number)
+    const commonProps = {
+      inputSize: editorInputSize as any, // keep font-size in sync with grid density
+      variant: 'ghost' as const,
+      fullWidth: true,
+      className: cn(
+        'w-full h-full !m-0 !p-0 !bg-transparent !border-none focus:!ring-0 focus:!outline-none block text-black',
+        align
+      ),
+      style: {
+        fontSize: 'inherit',
+        lineHeight: 'inherit',
+      } as React.CSSProperties, // belt + suspenders
+      autoFocus: true,
+      onKeyDown: handleEditKeyDown,
+      onBlur: handleEditSave,
+    };
+
     if (t === 'number') {
       return (
-        <input
+        <Input
           type="number"
           value={editValue ?? ''}
           onChange={(e) =>
             setEditValue(e.target.value === '' ? '' : Number(e.target.value))
           }
-          onKeyDown={handleEditKeyDown}
-          onBlur={handleEditSave}
-          className="w-full h-full m-0 p-0 border-none outline-none focus:outline-none focus:ring-0 bg-transparent block"
-          autoFocus
+          {...commonProps}
         />
       );
     }
 
     // default string
     return (
-      <input
+      <Input
         type="text"
         value={editValue ?? ''}
         onChange={(e) => setEditValue(e.target.value)}
-        onKeyDown={handleEditKeyDown}
-        onBlur={handleEditSave}
-        className="w-full h-full m-0 p-0 border-none outline-none focus:outline-none focus:ring-0 bg-transparent block"
-        autoFocus
+        {...commonProps}
       />
     );
   };
@@ -1322,10 +1342,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                   {orderedColumns
                     .filter((col) => columnVisibility[col.field] !== false)
                     .map((column) => {
-                      const isEditingCell =
-                        editingCell?.rowId === (row as any).id &&
-                        editingCell?.field === column.field;
-
                       return (
                         <td
                           key={column.field}
