@@ -617,13 +617,19 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     }
   };
 
-  const handleRowSelection = (rowId: string, checked: boolean) => {
-    const newSelection = new Set(selectedRows);
-    if (checked) newSelection.add(rowId);
-    else newSelection.delete(rowId);
-    setSelectedRows(Array.from(newSelection));
-    onSelectionModelChange?.(Array.from(newSelection));
-  };
+  const handleRowSelection = useCallback(
+    (rowId: string, checked: boolean) => {
+      setSelectedRows((prev) => {
+        const set = new Set(prev);
+        if (checked) set.add(rowId);
+        else set.delete(rowId);
+        const next = Array.from(set);
+        onSelectionModelChange?.(next);
+        return next;
+      });
+    },
+    [onSelectionModelChange]
+  );
 
   const handleDragStart = (e: React.DragEvent, columnField: string) => {
     setIsDragging(columnField);
@@ -636,10 +642,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     e.dataTransfer.setDragImage(dragImage, 0, 0);
     setTimeout(() => document.body.removeChild(dragImage), 0);
   };
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
+
   const handleDrop = (e: React.DragEvent, targetField: string) => {
     e.preventDefault();
     const sourceField = e.dataTransfer.getData('text/plain');
@@ -653,7 +656,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     }
     setIsDragging(null);
   };
-  const handleDragEnd = () => setIsDragging(null);
 
   const handleResizeStart = (e: React.MouseEvent, columnField: string) => {
     e.preventDefault();
@@ -849,7 +851,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
       style: {
         fontSize: 'inherit',
         lineHeight: 'inherit',
-      } as React.CSSProperties, // belt + suspenders
+      } as React.CSSProperties,
       autoFocus: true,
       onKeyDown: handleEditKeyDown,
       onBlur: handleEditSave,
@@ -938,23 +940,21 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     );
   };
 
-  /* Selection, pagination */
+  // Treat clicks from controls as non-row-selection clicks (like MUI)
+  const isInteractiveTarget = (el: HTMLElement | null) =>
+    !!el?.closest(
+      'button, a, input, select, textarea, [role="button"], [role="link"]'
+    );
+
   const handleRowClick = (row: any, event: React.MouseEvent) => {
-    if (!checkboxSelectionOnRowClick || !checkboxSelection) return;
+    if (!checkboxSelection || !checkboxSelectionOnRowClick) return;
     const target = event.target as HTMLElement;
-    if (
-      (target instanceof HTMLInputElement && target.type === 'checkbox') ||
-      target instanceof HTMLButtonElement ||
-      target instanceof HTMLInputElement
-    ) {
-      return;
-    }
+    if (isInteractiveTarget(target)) return;
+    if (editingCell && editingCell.rowId === (row as any).id) return;
+
     const rowId = String((row as any).id);
-    const newSelection = selectedRows.includes(rowId)
-      ? selectedRows.filter((id) => id !== rowId)
-      : [...selectedRows, rowId];
-    setSelectedRows(newSelection);
-    onSelectionModelChange?.(newSelection);
+    const willBeChecked = !selectedRows.includes(rowId);
+    handleRowSelection(rowId, willBeChecked);
   };
 
   /* Badge count */
@@ -1051,7 +1051,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
         />
       )}
 
-      {/* Table */}
+      {/* TABLE */}
       <div className="overflow-x-auto">
         <table
           className={`w-full ${getDensityClasses()}`}
@@ -1286,24 +1286,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                       ? 'bg-blue-50'
                       : ''
                   } ${!hideGridLines ? 'border-b' : ''}`}
-                  onClick={(e) => {
-                    if (!checkboxSelectionOnRowClick || !checkboxSelection)
-                      return;
-                    const target = e.target as HTMLElement;
-                    if (
-                      (target instanceof HTMLInputElement &&
-                        target.type === 'checkbox') ||
-                      target instanceof HTMLButtonElement ||
-                      target instanceof HTMLInputElement
-                    )
-                      return;
-                    const rowId = String((row as any).id);
-                    const newSelection = selectedRows.includes(rowId)
-                      ? selectedRows.filter((id) => id !== rowId)
-                      : [...selectedRows, rowId];
-                    setSelectedRows(newSelection);
-                    onSelectionModelChange?.(newSelection);
-                  }}
+                  onClick={(e) => handleRowClick(row, e)}
                   style={{
                     cursor:
                       checkboxSelectionOnRowClick && checkboxSelection
@@ -1327,13 +1310,10 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                             )}
                             onChange={(e) => {
                               e.stopPropagation();
-                              const newSelection = new Set(selectedRows);
-                              if (e.target.checked)
-                                newSelection.add(String((row as any).id));
-                              else newSelection.delete(String((row as any).id));
-                              const next = Array.from(newSelection);
-                              setSelectedRows(next);
-                              onSelectionModelChange?.(next);
+                              handleRowSelection(
+                                String((row as any).id),
+                                e.target.checked
+                              );
                             }}
                           />
                         </div>
