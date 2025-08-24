@@ -327,7 +327,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
         const newRules = model.items
           .filter((item) => allowedOperators.includes(item.operator as any))
           .map((item) => ({
-            id: Math.random().toString(36).substr(2, 9),
+            id: Math.random().toString(36).slice(2, 11),
             field: item.field,
             operator: item.operator as FilterRule['operator'],
             value: item.value,
@@ -591,7 +591,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     setTempFilterRules((prev) => [
       ...prev,
       {
-        id: Math.random().toString(36).substr(2, 9),
+        id: Math.random().toString(36).slice(2, 9),
         field: columns[0]?.field || '',
         operator: 'contains',
         value: '',
@@ -1211,7 +1211,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                                 return [
                                   ...prevRules,
                                   {
-                                    id: Math.random().toString(36).substr(2, 9),
+                                    id: Math.random().toString(36).slice(2, 9),
                                     field: column.field,
                                     operator: 'contains',
                                     value: newValue,
