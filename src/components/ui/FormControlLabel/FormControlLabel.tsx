@@ -1,23 +1,30 @@
 'use client';
 
-import React, { forwardRef, useRef, useId } from 'react';
+import React, { forwardRef, useId } from 'react';
 import { useFormControl } from '../FormControl/FormControl';
 
+type ControlProps = {
+  id?: string;
+  disabled?: boolean;
+  'aria-invalid'?: boolean;
+  'aria-required'?: boolean;
+};
+
 export interface FormControlLabelProps
-  extends React.HTMLAttributes<HTMLLabelElement> {
-  control: React.ReactElement;
+  extends React.LabelHTMLAttributes<HTMLLabelElement> {
   label?: React.ReactNode | string;
   labelPlacement?: 'end' | 'start' | 'top' | 'bottom';
   disabled?: boolean;
   required?: boolean;
   error?: boolean;
   size?: 'sm' | 'md' | 'lg';
+  children: React.ReactElement<ControlProps>;
 }
 
 const FormControlLabel = forwardRef<HTMLLabelElement, FormControlLabelProps>(
   (
     {
-      control,
+      children,
       label,
       labelPlacement = 'end',
       disabled: disabledProp,
@@ -31,7 +38,6 @@ const FormControlLabel = forwardRef<HTMLLabelElement, FormControlLabelProps>(
     ref
   ) => {
     const formControl = useFormControl();
-    const controlRef = useRef<HTMLInputElement>(null);
     const stableId = useId();
 
     const disabled = disabledProp ?? formControl?.disabled ?? false;
@@ -39,78 +45,52 @@ const FormControlLabel = forwardRef<HTMLLabelElement, FormControlLabelProps>(
     const error = errorProp ?? formControl?.error ?? false;
     const size = sizeProp ?? formControl?.size ?? 'md';
 
+    const control = children as React.ReactElement<ControlProps>;
     const controlId =
       control.props.id || formControl?.inputId || `form-control-${stableId}`;
 
-    const sizeClasses = {
-      sm: 'text-sm',
-      md: 'text-base',
-      lg: 'text-lg',
-    };
+    const isVertical = labelPlacement === 'top' || labelPlacement === 'bottom';
 
-    const baseClasses = 'inline-flex items-center cursor-pointer';
-    const disabledClasses = disabled ? 'opacity-50 cursor-not-allowed' : '';
-    const errorClasses = error ? 'text-red-600' : 'text-gray-700';
+    const baseClasses = 'inline-flex';
+    const orientationClasses = isVertical
+      ? 'flex-col items-start gap-1'
+      : 'flex-row items-center gap-3';
+    const disabledClasses = disabled ? 'cursor-not-allowed' : 'cursor-pointer';
 
-    const labelClasses = `font-medium ${sizeClasses[size]} ${errorClasses}`;
+    const sizeClasses = { sm: 'text-sm', md: 'text-base', lg: 'text-lg' };
+    const labelColor = error ? 'text-red-600' : 'text-gray-700';
+    const labelClasses = `font-medium ${sizeClasses[size]} ${labelColor}`;
 
-    const controlElement = React.cloneElement(control, {
+    const controlElement = React.cloneElement<ControlProps>(control, {
       id: controlId,
-      ref: controlRef,
-      disabled,
-      ...control.props,
+      disabled: control.props.disabled ?? disabled,
+      'aria-invalid': control.props['aria-invalid'] ?? (error || undefined),
+      'aria-required':
+        control.props['aria-required'] ?? (required || undefined),
     });
 
-    const labelElement = label && (
-      <span className={labelClasses}>
-        {label}
-        {required && <span className="text-red-500 ml-1">*</span>}
-      </span>
-    );
+    const labelElement =
+      label != null ? (
+        <span className={labelClasses}>
+          {label}
+          {required && <span className="text-red-500 ml-1">*</span>}
+        </span>
+      ) : null;
 
-    const renderContent = () => {
-      switch (labelPlacement) {
-        case 'start':
-          return (
-            <>
-              {labelElement}
-              <span className="ml-3">{controlElement}</span>
-            </>
-          );
-        case 'top':
-          return (
-            <div className="flex flex-col items-start">
-              {labelElement}
-              <div className="mt-1">{controlElement}</div>
-            </div>
-          );
-        case 'bottom':
-          return (
-            <div className="flex flex-col items-start">
-              {controlElement}
-              {labelElement && <div className="mt-1">{labelElement}</div>}
-            </div>
-          );
-        case 'end':
-        default:
-          return (
-            <>
-              {controlElement}
-              {labelElement && <span className="ml-3">{labelElement}</span>}
-            </>
-          );
-      }
-    };
+    const labelFirst = labelPlacement === 'start' || labelPlacement === 'top';
 
     return (
       <label
         ref={ref}
         htmlFor={controlId}
-        className={`${baseClasses} ${disabledClasses} ${className}`}
+        className={`${baseClasses} ${orientationClasses} ${disabledClasses} ${className}`}
+        data-orientation={isVertical ? 'vertical' : 'horizontal'}
         onClick={onClick}
         {...props}
       >
-        {renderContent()}
+        {labelFirst && labelElement}
+        {controlElement}
+        {!labelFirst && labelElement}
       </label>
     );
   }

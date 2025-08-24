@@ -55,9 +55,7 @@ const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     const baseClasses = `rounded border-gray-300 transition-colors ${
       showFocusRing ? 'focus:ring-2 focus:ring-offset-2' : 'focus:outline-none'
     }`;
-    const disabledClasses = disabled
-      ? 'opacity-50 cursor-not-allowed'
-      : 'cursor-pointer';
+    const disabledClasses = disabled ? 'cursor-not-allowed' : 'cursor-pointer';
     const checkboxClasses = `${baseClasses} ${sizeClasses[size]} ${variantClasses[variant]} ${disabledClasses} ${className}`;
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
