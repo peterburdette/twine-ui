@@ -44,7 +44,7 @@ const normalizeGridType = (t: Column['type']): GridColDef['type'] => {
     case 'actions':
       return t as GridColDef['type'];
     default:
-      // any custom/unknown string → treat as 'string'
+      // any custom/unknown string -> treat as 'string'
       return 'string';
   }
 };
@@ -571,6 +571,23 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
 
   const totalPages = Math.ceil(sortedRows.length / currentPageSize);
 
+  // Tri-state selection over the rows in the current page
+  const pageRowIds = useMemo(
+    () =>
+      paginatedRows.map((row) =>
+        String((row as any)[idField as any] ?? (row as any).id)
+      ),
+    [paginatedRows, idField]
+  );
+  const selectedOnPageCount = useMemo(
+    () => pageRowIds.filter((id) => selectedRows.includes(id)).length,
+    [pageRowIds, selectedRows]
+  );
+  const allChecked =
+    pageRowIds.length > 0 && selectedOnPageCount === pageRowIds.length;
+  const isIndeterminate =
+    selectedOnPageCount > 0 && selectedOnPageCount < pageRowIds.length;
+
   const handleSort = (field: string) => {
     const existingSort = sortModel.find((sort) => sort.field === field);
     let newSortModel: SortModel[];
@@ -607,14 +624,17 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
   };
 
   const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      const allIds = rows.map((row) => String((row as any).id));
-      setSelectedRows(allIds);
-      onSelectionModelChange?.(allIds);
-    } else {
-      setSelectedRows([]);
-      onSelectionModelChange?.([]);
-    }
+    setSelectedRows((prev) => {
+      const set = new Set(prev);
+      if (checked) {
+        pageRowIds.forEach((id) => set.add(id));
+      } else {
+        pageRowIds.forEach((id) => set.delete(id));
+      }
+      const next = Array.from(set);
+      onSelectionModelChange?.(next);
+      return next;
+    });
   };
 
   const handleRowSelection = useCallback(
@@ -756,7 +776,10 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     // Per-column editing only: editable must be true and no valueGetter
     const col = columns.find((c) => c.field === field);
     if (!col || col.editable !== true || col.valueGetter) return;
-    setEditingCell({ rowId, field });
+    setEditingCell({
+      rowId: (rowId as any) ?? '',
+      field,
+    });
     setEditValue(currentValue);
   };
 
@@ -788,7 +811,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     }
 
     const updatedRows = rows.map((row) =>
-      (row as any).id === rowId ? { ...(row as any), [field]: finalValue } : row
+      String((row as any)[idField as any] ?? (row as any).id) === String(rowId)
+        ? { ...(row as any), [field]: finalValue }
+        : row
     );
     setRows(updatedRows);
     onCellValueChange?.({
@@ -895,7 +920,8 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
 
     const isCellEditable = column.editable === true && !column.valueGetter;
     const isCurrentlyEditing =
-      editingCell?.rowId === (row as any).id &&
+      editingCell?.rowId ===
+        String((row as any)[idField as any] ?? (row as any).id) &&
       editingCell?.field === column.field;
 
     if (isCurrentlyEditing) {
@@ -930,7 +956,10 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
         className={cn('truncate', isCellEditable && 'cursor-text')}
         onDoubleClick={() => {
           if (isCellEditable) {
-            setEditingCell({ rowId: (row as any).id, field: column.field });
+            setEditingCell({
+              rowId: String((row as any)[idField as any] ?? (row as any).id),
+              field: column.field,
+            });
             setEditValue(value);
           }
         }}
@@ -950,9 +979,14 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     if (!checkboxSelection || !checkboxSelectionOnRowClick) return;
     const target = event.target as HTMLElement;
     if (isInteractiveTarget(target)) return;
-    if (editingCell && editingCell.rowId === (row as any).id) return;
+    if (
+      editingCell &&
+      String(editingCell.rowId) ===
+        String((row as any)[idField as any] ?? (row as any).id)
+    )
+      return;
 
-    const rowId = String((row as any).id);
+    const rowId = String((row as any)[idField as any] ?? (row as any).id);
     const willBeChecked = !selectedRows.includes(rowId);
     handleRowSelection(rowId, willBeChecked);
   };
@@ -1069,16 +1103,13 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                   >
                     <div className="flex items-center justify-center">
                       <Checkbox
-                        checked={
-                          rows.length > 0 &&
-                          rows.every((row) =>
-                            selectedRows.includes(String((row as any).id))
-                          )
-                        }
+                        checked={allChecked}
+                        indeterminate={isIndeterminate}
                         onChange={(e) => {
                           e.stopPropagation();
                           handleSelectAll(e.target.checked);
                         }}
+                        disabled={pageRowIds.length === 0}
                       />
                     </div>
                   </th>
@@ -1282,7 +1313,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                 <tr
                   key={(row as any).id}
                   className={`border-b border-gray-200 hover:bg-gray-50 ${
-                    selectedRows.includes(String((row as any).id))
+                    selectedRows.includes(
+                      String((row as any)[idField as any] ?? (row as any).id)
+                    )
                       ? 'bg-blue-50'
                       : ''
                   } ${!hideGridLines ? 'border-b' : ''}`}
@@ -1306,12 +1339,17 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                         <div className="flex items-center justify-center">
                           <Checkbox
                             checked={selectedRows.includes(
-                              String((row as any).id)
+                              String(
+                                (row as any)[idField as any] ?? (row as any).id
+                              )
                             )}
                             onChange={(e) => {
                               e.stopPropagation();
                               handleRowSelection(
-                                String((row as any).id),
+                                String(
+                                  (row as any)[idField as any] ??
+                                    (row as any).id
+                                ),
                                 e.target.checked
                               );
                             }}
@@ -1340,7 +1378,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                           }}
                           onDoubleClick={() =>
                             handleCellDoubleClick(
-                              (row as any).id,
+                              String(
+                                (row as any)[idField as any] ?? (row as any).id
+                              ),
                               column.field,
                               (row as any)[column.field]
                             )
