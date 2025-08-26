@@ -3,7 +3,17 @@ import { forwardRef } from 'react';
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'default' | 'outline' | 'ghost' | 'destructive' | 'secondary';
+  variant?:
+    | 'default'
+    | 'outline'
+    | 'ghost'
+    | 'destructive'
+    | 'secondary'
+    | 'link'
+    | 'success'
+    | 'warning'
+    | 'info'
+    | 'unstyled';
   size?: 'sm' | 'md' | 'lg' | 'icon';
   fullWidth?: boolean;
   loading?: boolean;
@@ -53,6 +63,19 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       secondary: `bg-gray-100 text-gray-900 hover:bg-gray-200 active:bg-gray-300 disabled:hover:bg-gray-100 disabled:active:bg-gray-100 ${
         showFocusRing ? 'focus:ring-gray-500' : ''
       }`,
+      link: `text-blue-600 underline-offset-4 hover:underline disabled:text-blue-400 ${
+        showFocusRing ? 'focus:ring-blue-500' : ''
+      }`,
+      success: `bg-green-600 text-white hover:bg-green-700 active:bg-green-800 disabled:hover:bg-green-600 disabled:active:bg-green-600 ${
+        showFocusRing ? 'focus:ring-green-500' : ''
+      }`,
+      warning: `bg-yellow-500 text-black hover:bg-yellow-600 active:bg-yellow-700 disabled:hover:bg-yellow-500 disabled:active:bg-yellow-500 ${
+        showFocusRing ? 'focus:ring-yellow-400' : ''
+      }`,
+      info: `bg-sky-500 text-white hover:bg-sky-600 active:bg-sky-700 disabled:hover:bg-sky-500 disabled:active:bg-sky-500 ${
+        showFocusRing ? 'focus:ring-sky-400' : ''
+      }`,
+      unstyled: '', // No styles at all — just raw <button>
     };
 
     const sizeClasses = {
@@ -73,6 +96,8 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         className={buttonClasses}
         disabled={isDisabled}
+        aria-disabled={isDisabled || undefined}
+        aria-busy={loading || undefined}
         type={type}
         {...props}
       >
@@ -83,6 +108,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             }`}
             fill="none"
             viewBox="0 0 24 24"
+            aria-hidden="true"
           >
             <circle
               className="opacity-25"
@@ -95,16 +121,27 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             <path
               className="opacity-75"
               fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 
+                3.042 1.135 5.824 3 7.938l3-2.647z"
             />
           </svg>
         )}
         {!loading && startIcon && (
-          <span className={`${children ? 'mr-2' : ''}`}>{startIcon}</span>
+          <span
+            aria-hidden="true"
+            className={`${children ? 'mr-2' : ''}`}
+          >
+            {startIcon}
+          </span>
         )}
         {children}
         {!loading && endIcon && (
-          <span className={`${children ? 'ml-2' : ''}`}>{endIcon}</span>
+          <span
+            aria-hidden="true"
+            className={`${children ? 'ml-2' : ''}`}
+          >
+            {endIcon}
+          </span>
         )}
       </button>
     );
