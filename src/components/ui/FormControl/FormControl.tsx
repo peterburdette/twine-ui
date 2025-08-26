@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, createContext, useContext, useMemo } from 'react';
+import { forwardRef, createContext, useContext, useMemo, useId } from 'react';
 import { cn } from '../../../lib/utils';
 
 export interface FormControlProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -21,15 +21,15 @@ interface FormControlContextValue {
   variant?: 'standard' | 'outlined' | 'filled';
   size?: 'sm' | 'md' | 'lg';
   inputId?: string;
+  descriptionId?: string;
+  errorId?: string;
 }
 
 const FormControlContext = createContext<FormControlContextValue | undefined>(
   undefined
 );
 
-export const useFormControl = () => {
-  return useContext(FormControlContext);
-};
+export const useFormControl = () => useContext(FormControlContext);
 
 const FormControl = forwardRef<HTMLDivElement, FormControlProps>(
   (
@@ -48,21 +48,20 @@ const FormControl = forwardRef<HTMLDivElement, FormControlProps>(
     },
     ref
   ) => {
-    // Stable ID for linking <label htmlFor> with inputs
+    // Stable IDs for input + descriptions
+    const reactId = useId();
     const inputId = useMemo(
-      () =>
-        id ?? `form-control-input-${Math.random().toString(36).slice(2, 11)}`,
-      [id]
+      () => id ?? `form-control-input-${reactId}`,
+      [id, reactId]
     );
+    const descriptionId = useMemo(
+      () => `form-control-desc-${reactId}`,
+      [reactId]
+    );
+    const errorId = useMemo(() => `form-control-err-${reactId}`, [reactId]);
 
-    const marginClasses = {
-      none: '',
-      dense: 'mb-2',
-      normal: 'mb-4',
-    };
-
+    const marginClasses = { none: '', dense: 'mb-2', normal: 'mb-4' };
     const widthClasses = fullWidth ? 'w-full' : '';
-
     const formControlClasses = cn(
       marginClasses[margin],
       widthClasses,
@@ -76,6 +75,8 @@ const FormControl = forwardRef<HTMLDivElement, FormControlProps>(
       variant,
       size,
       inputId,
+      descriptionId,
+      errorId,
     };
 
     return (
