@@ -113,6 +113,19 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
     const inputId = idProp || formControl?.inputId || `input-${stableId}`;
 
+    // === A11y: derive helper/error IDs and describedby ===
+    const helperId = helperText ? `${inputId}-help` : undefined;
+    const errorText = typeof error === 'string' ? error : undefined;
+    const errorId = errorText ? `${inputId}-error` : undefined;
+    const describedBy =
+      [
+        (props['aria-describedby'] as string | undefined) || undefined,
+        helperId,
+        errorText ? errorId : undefined,
+      ]
+        .filter(Boolean)
+        .join(' ') || undefined;
+
     // Check if input has value
     useEffect(() => {
       const currentValue = value ?? '';
@@ -183,23 +196,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         helper: 'text-lg',
       },
     };
-
-    // Get focus classes
-    // const getFocusClasses = () => {
-    //   if (disableFocusStyles) return "focus:outline-none"
-
-    //   // Special case for underline variant - only border bottom, no ring
-    //   if (variant === "underline") {
-    //     return "focus:border-b-blue-500 focus:outline-none"
-    //   }
-
-    //   // Special case for ghost variant - same as default with ring
-    //   if (variant === "ghost") {
-    //     return "focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
-    //   }
-
-    //   return "focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
-    // }
 
     // Variant-specific classes
     const getVariantClasses = () => {
@@ -448,6 +444,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               {/* Start Icon */}
               {startIcon && (
                 <div
+                  aria-hidden="true"
                   className={`absolute left-3 top-1/2 -translate-y-1/2 ${sizeClasses[inputSize].icon} text-gray-400 pointer-events-none`}
                 >
                   {startIcon}
@@ -457,6 +454,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               {/* End Icon */}
               {endIcon && (
                 <div
+                  aria-hidden="true"
                   className={`absolute right-3 top-1/2 -translate-y-1/2 ${sizeClasses[inputSize].icon} text-gray-400 pointer-events-none`}
                 >
                   {endIcon}
@@ -481,6 +479,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 onChange={handleChange}
                 onFocus={handleFocus}
                 onBlur={handleBlur}
+                aria-invalid={!!error || undefined}
+                aria-required={required || undefined}
+                aria-disabled={disabled || undefined}
+                aria-errormessage={errorText ? errorId : undefined}
+                aria-describedby={describedBy}
                 {...props}
               />
             </div>
@@ -511,6 +514,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {/* Start Icon */}
             {startIcon && (
               <div
+                aria-hidden="true"
                 className={`absolute left-3 top-1/2 -translate-y-1/2 ${sizeClasses[inputSize].icon} text-gray-400 pointer-events-none`}
               >
                 {startIcon}
@@ -520,6 +524,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {/* End Icon */}
             {endIcon && (
               <div
+                aria-hidden="true"
                 className={`absolute right-3 top-1/2 -translate-y-1/2 ${sizeClasses[inputSize].icon} text-gray-400 pointer-events-none`}
               >
                 {endIcon}
@@ -543,14 +548,26 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               onChange={handleChange}
               onFocus={handleFocus}
               onBlur={handleBlur}
+              aria-invalid={!!error || undefined}
+              aria-required={required || undefined}
+              aria-disabled={disabled || undefined}
+              aria-errormessage={errorText ? errorId : undefined}
+              aria-describedby={describedBy}
               {...props}
             />
           </div>
         )}
 
-        {/* Helper Text */}
-        {(helperText || error) && (
-          <div className={helperTextClasses}>{error || helperText}</div>
+        {/* Helper / Error Text (live region) */}
+        {(helperText || errorText) && (
+          <div
+            id={errorText ? errorId : helperId}
+            className={helperTextClasses}
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {errorText || helperText}
+          </div>
         )}
       </div>
     );

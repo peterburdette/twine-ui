@@ -55,6 +55,19 @@ const Radio = forwardRef<HTMLInputElement, RadioProps>(
 
     const radioId = id || formControl?.inputId || `radio-${stableId}`;
 
+    // A11y: compute describedBy from surrounding FormControl (if available) and any passed-in aria-describedby
+    const describedBy =
+      [
+        (props['aria-describedby'] as string | undefined) || undefined,
+        // If your FormControl exposes a describedBy id, include it here
+        (formControl as any)?.describedBy,
+      ]
+        .filter(Boolean)
+        .join(' ') || undefined;
+
+    // Consider invalid if variant is 'error' or FormControl marks an error
+    const isInvalid = variant === 'error' || !!formControl?.error;
+
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       onChange?.(event);
       if (radioGroup?.onChange && value !== undefined) {
@@ -110,6 +123,11 @@ const Radio = forwardRef<HTMLInputElement, RadioProps>(
         value={value}
         checked={checked}
         onChange={handleChange}
+        // A11y: expose states and description
+        aria-disabled={disabled || undefined}
+        aria-required={required || undefined}
+        aria-invalid={isInvalid || undefined}
+        aria-describedby={describedBy}
         {...props}
       />
     );
