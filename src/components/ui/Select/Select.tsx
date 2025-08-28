@@ -24,10 +24,12 @@ export interface SelectProps
   disabled?: boolean;
   size?: 'sm' | 'md' | 'lg';
   variant?: 'default' | 'filled' | 'outlined' | 'ghost' | 'underline';
+  autoWidth?: boolean;
   fullWidth?: boolean;
   required?: boolean;
   showFocusRing?: boolean;
   id?: string;
+  className?: string;
 }
 
 const Select = forwardRef<HTMLDivElement, SelectProps>(
@@ -43,6 +45,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       disabled = false,
       size = 'md',
       variant = 'default',
+      autoWidth = false,
       fullWidth = false,
       required = false,
       showFocusRing = false,
@@ -214,11 +217,14 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       : 'cursor-pointer';
 
     const selectClasses = cn(
-      'relative w-full flex items-center justify-between rounded-md transition-colors focus:outline-none',
+      'relative flex items-center justify-between rounded-md transition-colors focus:outline-none',
       sizeClasses[size],
       variantClasses[variant],
       errorClasses,
       disabledClasses,
+      // Width behavior
+      fullWidth ? 'w-full' : 'inline-flex',
+      !autoWidth && !fullWidth && 'min-w-[120px]',
       showFocusRing && 'focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
       className
     );
@@ -446,7 +452,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
     return (
       <div
         ref={selectRef}
-        className={cn('w-full', fullWidth && 'w-full')}
+        className={cn(fullWidth ? 'block w-full' : 'inline-block')}
         {...props}
       >
         {label && (
