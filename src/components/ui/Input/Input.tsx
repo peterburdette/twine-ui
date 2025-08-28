@@ -35,7 +35,7 @@ export interface InputProps
   startAdornment?: React.ReactNode;
   endAdornment?: React.ReactNode;
 
-  // Inline elements - updated structure
+  // Inline elements
   inlineSelect?: {
     options: InputSelectOption[];
     value?: string;
@@ -150,12 +150,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       onChange?.(event);
     };
 
-    // Copy functionality for inline button
+    // Inline button "Copy"
     const handleCopy = async () => {
       if (inlineButton?.label === 'Copy' && value) {
         try {
           await navigator.clipboard.writeText(String(value));
-          // You could add a toast notification here
         } catch (err) {
           console.error('Failed to copy text: ', err);
         }
@@ -195,7 +194,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         label: 'text-lg',
         helper: 'text-lg',
       },
-    };
+    } as const;
 
     // Variant-specific classes
     const getVariantClasses = () => {
@@ -204,129 +203,112 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         : '';
 
       // Base focus classes for most variants
-      const baseFocusClasses =
-        'focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50';
+      const focusRing = disableFocusStyles
+        ? ''
+        : showFocusRing
+        ? 'focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+        : 'focus:outline-none focus:ring-0';
+
+      const baseFocusBorder = disableFocusStyles ? '' : 'focus:border-blue-500';
 
       // Special focus classes for underline (no ring, only bottom border)
-      const underlineFocusClasses =
-        'focus:outline-none focus:border-b-blue-500';
+      const underlineFocus = disableFocusStyles
+        ? ''
+        : 'focus:border-b-blue-500';
 
-      // Error classes that work with focus
       const getErrorClasses = () => {
         if (!error) return '';
-
         if (variant === 'underline') {
           return '!border-b-red-500 focus:!border-b-red-500';
         }
-
-        return '!border-red-500 focus:!border-red-500 focus:!ring-red-500/50';
+        return (
+          '!border-red-500 focus:!border-red-500 ' +
+          (showFocusRing ? 'focus:!ring-red-500/50' : '')
+        );
       };
 
       const errorClasses = getErrorClasses();
 
       switch (variant) {
         case 'underline':
-          return `border-0 border-b-2 border-gray-300 bg-transparent rounded-none ${underlineFocusClasses} ${errorClasses} ${disabledClasses}`;
-
+          return `border-0 border-b-2 border-gray-300 bg-transparent rounded-none ${underlineFocus} ${errorClasses} ${disabledClasses}`;
         case 'filled':
-          return `border border-gray-300 bg-gray-100 rounded-md focus:bg-white ${baseFocusClasses} ${errorClasses} ${disabledClasses}`;
-
+          return `border border-gray-300 bg-gray-100 rounded-md focus:bg-white ${focusRing} ${baseFocusBorder} ${errorClasses} ${disabledClasses}`;
         case 'outlined':
-          return `border-2 border-gray-300 bg-white rounded-md ${baseFocusClasses} ${errorClasses} ${disabledClasses}`;
-
+          return `border-2 border-gray-300 bg-white rounded-md ${focusRing} ${baseFocusBorder} ${errorClasses} ${disabledClasses}`;
         case 'ghost':
-          return `border border-transparent bg-transparent hover:bg-gray-50 rounded-md focus:bg-white ${baseFocusClasses} ${errorClasses} ${disabledClasses}`;
-
+          return `border border-transparent bg-transparent hover:bg-gray-50 rounded-md focus:bg-white ${focusRing} ${baseFocusBorder} ${errorClasses} ${disabledClasses}`;
         case 'floating':
-          return `border border-gray-300 bg-white rounded-md ${baseFocusClasses} ${errorClasses} ${disabledClasses}`;
-
+          return `border border-gray-300 bg-white rounded-md ${focusRing} ${baseFocusBorder} ${errorClasses} ${disabledClasses}`;
         case 'inset':
-          return `border border-gray-300 bg-white rounded-md pt-6 ${baseFocusClasses} ${errorClasses} ${disabledClasses}`;
-
+          return `border border-gray-300 bg-white rounded-md pt-5 pb-3 ${focusRing} ${baseFocusBorder} ${errorClasses} ${disabledClasses}`;
         case 'default':
         default:
-          return `block w-full rounded-md border border-gray-300 ${baseFocusClasses} disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 transition-colors ${errorClasses} ${disabledClasses}`;
+          return `block w-full rounded-md border border-gray-300 ${focusRing} ${baseFocusBorder} disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 transition-colors ${errorClasses} ${disabledClasses}`;
       }
     };
 
-    // Calculate padding for different inline elements
-    const getInputPadding = () => {
-      let leftPadding = '';
-      let rightPadding = '';
-
-      // Handle inline select positioning with wider spacing
-      if (inlineSelect?.position === 'left') {
-        leftPadding = 'pl-24';
-      } else if (inlineSelect?.position === 'right') {
-        rightPadding = 'pr-24';
-      }
-
-      // Handle inline label positioning
-      if (inlineLabel?.position === 'left') {
-        leftPadding = 'pl-8';
-      } else if (inlineLabel?.position === 'right') {
-        rightPadding = 'pr-8';
-      }
-
-      // Handle inline add-on positioning
-      if (inlineAddOn?.position === 'left') {
-        leftPadding = 'pl-8';
-      } else if (inlineAddOn?.position === 'right') {
-        rightPadding = 'pr-8';
-      }
-
-      // Handle icons with proper spacing
-      if (endIcon && !rightPadding) {
-        rightPadding = 'pr-10';
-      }
-
-      // Handle icons
-      if (startIcon && !leftPadding) {
-        leftPadding = 'pl-10';
-      }
-
-      return `${leftPadding} ${rightPadding}`.trim();
-    };
-
-    // Label classes for floating and inset variants
+    // Animated label classes for floating & inset
     const getLabelClasses = () => {
-      const baseLabel = `absolute transition-all duration-200 pointer-events-none ${sizeClasses[inputSize].label}`;
-      const shouldShrink = focused || hasValue || !!placeholder;
+      const base = `absolute pointer-events-none select-none transition-all duration-200 ease-out origin-left ${sizeClasses[inputSize].label}`;
+      const isActive = focused || hasValue; // shrink/float condition
+      const errorColor = error ? 'text-red-600' : '';
 
       if (variant === 'floating') {
-        return `${baseLabel} ${
-          shouldShrink
-            ? `top-0 left-1 -translate-y-1/2 scale-75 bg-white px-1 ${
-                focused ? 'text-blue-600' : 'text-gray-600'
-              }`
-            : 'top-1/2 left-1 -translate-y-1/2 text-gray-500'
-        } ${error ? 'text-red-600' : ''}`;
+        // Starts centered; shrinks to top with bg chip
+        const basePos = `top-1/2 left-3 -translate-y-1/2 scale-100 text-gray-500`;
+        const activePos = `top-0 left-3 -translate-y-1/2 scale-75 px-1 bg-white ${
+          focused ? 'text-blue-600' : 'text-gray-600'
+        }`;
+        return `${base} ${isActive ? activePos : basePos} ${errorColor}`;
       }
 
       if (variant === 'inset') {
-        return `absolute top-2.5 left-3 flex items-center text-gray-500 block text-xs font-medium text-gray-700`;
+        // Starts inside near top; shrinks slightly upward
+        const basePos = `top-5 left-3 scale-100 text-gray-500`;
+        const activePos = `top-1 left-3 scale-90 ${
+          focused ? 'text-blue-600' : 'text-gray-600'
+        }`;
+        return `${base} ${isActive ? activePos : basePos} ${errorColor}`;
       }
 
       return '';
     };
 
-    // Render inline add-on structure
+    // Compute extra paddings for inline props
+    const getInputPadding = () => {
+      let leftPadding = '';
+      let rightPadding = '';
+
+      if (inlineSelect?.position === 'left') leftPadding = 'pl-24';
+      else if (inlineSelect?.position === 'right') rightPadding = 'pr-24';
+
+      if (inlineLabel?.position === 'left') leftPadding = 'pl-8';
+      else if (inlineLabel?.position === 'right') rightPadding = 'pr-8';
+
+      if (inlineAddOn?.position === 'left') leftPadding = 'pl-8';
+      else if (inlineAddOn?.position === 'right') rightPadding = 'pr-8';
+
+      if (endIcon && !rightPadding) rightPadding = 'pr-10';
+      if (startIcon && !leftPadding) leftPadding = 'pl-10';
+
+      return `${leftPadding} ${rightPadding}`.trim();
+    };
+
+    // Inline helpers
     const renderInlineAddOn = () => {
       if (!inlineAddOn) return null;
-
       const position = inlineAddOn.position || 'right';
       const positionClasses =
         position === 'left'
           ? 'inset-y-0 left-0 flex items-center rounded-md rounded-r-none border border-r-0 border-gray-300 bg-gray-100 px-2.5 text-gray-700'
           : 'inset-y-0 right-0 flex items-center rounded-md rounded-l-none border border-l-0 border-gray-300 bg-gray-100 px-2.5 text-gray-700';
-
       return <div className={positionClasses}>{inlineAddOn.content}</div>;
     };
 
     // Render inline button structure
     const renderInlineButton = () => {
       if (!inlineButton) return null;
-
       return (
         <button
           type="button"
@@ -343,13 +325,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     // Render inline select with reusable Select component
     const renderInlineSelect = () => {
       if (!inlineSelect) return null;
-
       const position = inlineSelect.position || 'left';
       const positionClasses =
         position === 'left'
           ? 'absolute inset-y-0 left-0 flex items-center text-gray-500'
           : 'absolute inset-y-0 right-0 flex items-center text-gray-500';
-
       return (
         <div className={positionClasses}>
           <div className="h-full flex items-center">
@@ -371,13 +351,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     // Render inline label
     const renderInlineLabel = () => {
       if (!inlineLabel) return null;
-
       const position = inlineLabel.position || 'left';
       const positionClasses =
         position === 'left'
           ? 'pointer-events-none absolute inset-y-0 left-0 flex items-center px-2.5 text-gray-500'
           : 'pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-gray-500';
-
       return <div className={positionClasses}>{inlineLabel.text}</div>;
     };
 
@@ -393,7 +371,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           ? 'rounded-l-none'
           : 'rounded-r-none'
         : ''
-    } ${needsFlexWrapper ? 'focus:z-10' : ''} ${className}`;
+    } ${needsFlexWrapper ? 'focus:z-10' : ''} peer ${className}`;
 
     // Container classes with width control
     const containerClasses = `${fullWidth ? 'w-full' : width ? width : 'w-64'}`;
@@ -402,6 +380,14 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     const helperTextClasses = `mt-1 ${sizeClasses[inputSize].helper} ${
       error ? 'text-red-600' : 'text-gray-500'
     }`;
+
+    // For floating/inset, only show the real placeholder when shrunk
+    const effectivePlaceholder =
+      variant === 'floating' || variant === 'inset'
+        ? focused || hasValue
+          ? placeholder ?? ''
+          : ' '
+        : placeholder;
 
     return (
       <div className={containerClasses}>
@@ -422,7 +408,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {/* Left side add-on */}
             {inlineAddOn?.position === 'left' && renderInlineAddOn()}
 
-            {/* Input with relative positioning for overlays */}
+            {/* Input + animated label */}
             <div className="relative flex-1">
               {/* Floating/Inset Label */}
               {label && ['floating', 'inset'].includes(variant) && (
@@ -466,13 +452,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 ref={ref}
                 id={inputId}
                 type={type}
-                className={inputClasses}
-                placeholder={
-                  ['floating', 'inset'].includes(variant) &&
-                  (focused || hasValue)
-                    ? placeholder
-                    : placeholder
-                }
+                className={`${inputClasses} peer`}
+                placeholder={effectivePlaceholder}
                 disabled={disabled}
                 required={required}
                 value={value}
@@ -536,12 +517,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               ref={ref}
               id={inputId}
               type={type}
-              className={inputClasses}
-              placeholder={
-                ['floating', 'inset'].includes(variant) && (focused || hasValue)
-                  ? placeholder
-                  : placeholder
-              }
+              className={`${inputClasses} peer`}
+              placeholder={effectivePlaceholder}
               disabled={disabled}
               required={required}
               value={value}
