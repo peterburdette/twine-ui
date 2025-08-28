@@ -56,10 +56,11 @@ const Radio = forwardRef<HTMLInputElement, RadioProps>(
     const name = nameProp ?? radioGroup?.name;
 
     const checked =
-      checkedProp ??
-      (radioGroup?.value !== undefined
-        ? radioGroup.value === value
-        : undefined);
+      checkedProp !== undefined
+        ? checkedProp
+        : radioGroup
+        ? radioGroup.value === value // boolean even when group.value is undefined
+        : undefined;
 
     const radioId = id || formControl?.inputId || `radio-${stableId}`;
 
