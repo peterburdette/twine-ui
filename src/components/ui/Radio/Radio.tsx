@@ -20,8 +20,9 @@ const Radio = forwardRef<HTMLInputElement, RadioProps>(
   (
     {
       className = '',
-      size: sizeProp = 'md',
-      variant: variantProp = 'default',
+      // NOTE: no defaults here so we can inherit from RadioGroup/FormControl
+      size: sizeProp,
+      variant: variantProp,
       showFocusRing = false,
       id,
       disabled: disabledProp,
@@ -38,15 +39,22 @@ const Radio = forwardRef<HTMLInputElement, RadioProps>(
     const radioGroup = useRadioGroup();
     const stableId = useId();
 
+    // Inheritance chain: prop -> group -> form control -> fallback
     const disabled =
       disabledProp ?? radioGroup?.disabled ?? formControl?.disabled ?? false;
-    const required = requiredProp ?? formControl?.required ?? false;
+
+    const required =
+      requiredProp ?? radioGroup?.required ?? formControl?.required ?? false;
+
     const size = sizeProp ?? radioGroup?.size ?? formControl?.size ?? 'md';
-    const variant =
+
+    const variant: NonNullable<RadioProps['variant']> =
       variantProp ??
       radioGroup?.variant ??
       (formControl?.error ? 'error' : 'default');
+
     const name = nameProp ?? radioGroup?.name;
+
     const checked =
       checkedProp ??
       (radioGroup?.value !== undefined
@@ -59,7 +67,6 @@ const Radio = forwardRef<HTMLInputElement, RadioProps>(
     const describedBy =
       [
         (props['aria-describedby'] as string | undefined) || undefined,
-        // If your FormControl exposes a describedBy id, include it here
         (formControl as any)?.describedBy,
       ]
         .filter(Boolean)
@@ -68,20 +75,13 @@ const Radio = forwardRef<HTMLInputElement, RadioProps>(
     // Consider invalid if variant is 'error' or FormControl marks an error
     const isInvalid = variant === 'error' || !!formControl?.error;
 
-    const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      onChange?.(event);
-      if (radioGroup?.onChange && value !== undefined) {
-        radioGroup.onChange(value.toString());
-      }
-    };
-
-    const sizeClasses = {
+    const sizeClasses: Record<NonNullable<RadioProps['size']>, string> = {
       sm: 'w-4 h-4',
       md: 'w-5 h-5',
       lg: 'w-6 h-6',
     };
 
-    const variantClasses = {
+    const variantClasses: Record<NonNullable<RadioProps['variant']>, string> = {
       default: `accent-blue-600 ${showFocusRing ? 'focus:ring-blue-500' : ''}`,
       success: `accent-green-600 ${
         showFocusRing ? 'focus:ring-green-500' : ''
@@ -94,16 +94,21 @@ const Radio = forwardRef<HTMLInputElement, RadioProps>(
 
     const disabledClasses = disabled ? 'cursor-not-allowed' : 'cursor-pointer';
 
-    const radioClasses = `${sizeClasses[size]}
-      ${variantClasses[variant]}
-      ${disabledClasses}
-      border border-gray-300 rounded-full
-      ${
-        showFocusRing
-          ? 'focus:ring-2 focus:ring-offset-2'
-          : 'focus:outline-none'
+    const radioClasses = [
+      sizeClasses[size],
+      variantClasses[variant],
+      disabledClasses,
+      'border border-gray-300 rounded-full',
+      showFocusRing ? 'focus:ring-2 focus:ring-offset-2' : 'focus:outline-none',
+      className,
+    ].join(' ');
+
+    const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      onChange?.(event);
+      if (radioGroup?.onChange && value !== undefined) {
+        radioGroup.onChange(value.toString());
       }
-      ${className}`;
+    };
 
     return (
       <input
@@ -123,7 +128,7 @@ const Radio = forwardRef<HTMLInputElement, RadioProps>(
         value={value}
         checked={checked}
         onChange={handleChange}
-        // A11y: expose states and description
+        // A11y
         aria-disabled={disabled || undefined}
         aria-required={required || undefined}
         aria-invalid={isInvalid || undefined}
