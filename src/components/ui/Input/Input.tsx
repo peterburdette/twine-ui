@@ -1,7 +1,7 @@
 'use client';
 
 import type React from 'react';
-import { forwardRef, useState, useEffect, useId } from 'react';
+import { forwardRef, useState, useEffect, useId, useRef } from 'react';
 import { useFormControl } from '../FormControl/FormControl';
 import { Select } from '../Select/Select';
 
@@ -196,55 +196,139 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       },
     } as const;
 
+    // Size-based fallbacks for icon/adornment/select width (px)
+    const iconSizePx = { xs: 12, sm: 16, md: 20, lg: 24, xl: 28 } as const;
+    const fallbackPadPx = { xs: 32, sm: 36, md: 40, lg: 44, xl: 48 } as const;
+    const fallbackSelectPadPx = {
+      xs: 64,
+      sm: 72,
+      md: 80,
+      lg: 88,
+      xl: 96,
+    } as const;
+
+    // Measure adornments and inlineSelect so placeholder/text never overlap
+    const startAdornmentRef = useRef<HTMLDivElement | null>(null);
+    const endAdornmentRef = useRef<HTMLDivElement | null>(null);
+    const inlineSelectLeftRef = useRef<HTMLDivElement | null>(null);
+    const inlineSelectRightRef = useRef<HTMLDivElement | null>(null);
+
+    const [padLeftPx, setPadLeftPx] = useState(0);
+    const [padRightPx, setPadRightPx] = useState(0);
+
+    useEffect(() => {
+      const GAP = 12; // px gap between affix and text
+
+      // LEFT
+      let left = 0;
+      if (inlineSelect?.position === 'left' && inlineSelectLeftRef.current) {
+        left = inlineSelectLeftRef.current.getBoundingClientRect().width + GAP;
+      } else if (startAdornmentRef.current) {
+        left = startAdornmentRef.current.getBoundingClientRect().width + GAP;
+      } else if (startIcon) {
+        left = 12 /* left-3 */ + iconSizePx[inputSize] + 8 /* breathing */;
+      }
+
+      // RIGHT
+      let right = 0;
+      if (inlineSelect?.position === 'right' && inlineSelectRightRef.current) {
+        right =
+          inlineSelectRightRef.current.getBoundingClientRect().width + GAP;
+      } else if (endAdornmentRef.current) {
+        right = endAdornmentRef.current.getBoundingClientRect().width + GAP;
+      } else if (endIcon) {
+        right = 12 /* right-3 */ + iconSizePx[inputSize] + 8 /* breathing */;
+      }
+
+      // Fallbacks by size (SSR/hidden)
+      if (!left) {
+        if (inlineSelect?.position === 'left')
+          left = fallbackSelectPadPx[inputSize];
+        else if (startIcon || startAdornment) left = fallbackPadPx[inputSize];
+      }
+      if (!right) {
+        if (inlineSelect?.position === 'right')
+          right = fallbackSelectPadPx[inputSize];
+        else if (endIcon || endAdornment) right = fallbackPadPx[inputSize];
+      }
+
+      setPadLeftPx(left);
+      setPadRightPx(right);
+    }, [
+      inlineSelect?.position,
+      startAdornment,
+      endAdornment,
+      startIcon,
+      endIcon,
+      inputSize,
+    ]);
+
     // Variant-specific classes
     const getVariantClasses = () => {
       const disabledClasses = disabled
         ? 'opacity-50 cursor-not-allowed bg-gray-50'
         : '';
 
-      // Base focus classes for most variants
-      const focusRing = disableFocusStyles
-        ? ''
-        : showFocusRing
-        ? 'focus:outline-none focus:ring-2 focus:ring-blue-500/50'
-        : 'focus:outline-none focus:ring-0';
+      // Global focus ring toggle (applies to most variants)
+      const ringOnFocus =
+        !disableFocusStyles && showFocusRing
+          ? 'focus:ring-2 focus:ring-blue-500/50'
+          : 'focus:ring-0';
 
       const baseFocusBorder = disableFocusStyles ? '' : 'focus:border-blue-500';
 
-      // Special focus classes for underline (no ring, only bottom border)
-      const underlineFocus = disableFocusStyles
-        ? ''
-        : 'focus:border-b-blue-500';
-
+      // Error classes
       const getErrorClasses = () => {
         if (!error) return '';
         if (variant === 'underline') {
+          // underline is bottom-only border
           return '!border-b-red-500 focus:!border-b-red-500';
+        }
+        if (variant === 'ghost') {
+          // ghost error = border red
+          return 'border border-red-500 focus:border-red-500';
         }
         return (
           '!border-red-500 focus:!border-red-500 ' +
-          (showFocusRing ? 'focus:!ring-red-500/50' : '')
+          (!disableFocusStyles && showFocusRing ? 'focus:!ring-red-500/50' : '')
         );
       };
 
       const errorClasses = getErrorClasses();
 
       switch (variant) {
-        case 'underline':
-          return `border-0 border-b-2 border-gray-300 bg-transparent rounded-none ${underlineFocus} ${errorClasses} ${disabledClasses}`;
+        case 'underline': {
+          const base =
+            'border-0 border-b-2 border-b-gray-300 bg-transparent rounded-none';
+          const focusBottom = disableFocusStyles
+            ? 'focus:outline-none'
+            : 'focus:outline-none focus:border-b-blue-500';
+          return `${base} ${focusBottom} ${ringOnFocus} ${errorClasses} ${disabledClasses}`;
+        }
+
         case 'filled':
-          return `border border-gray-300 bg-gray-100 rounded-md focus:bg-white ${focusRing} ${baseFocusBorder} ${errorClasses} ${disabledClasses}`;
+          return `border border-gray-300 bg-gray-100 rounded-md focus:bg-white focus:outline-none ${ringOnFocus} ${baseFocusBorder} ${errorClasses} ${disabledClasses}`;
+
         case 'outlined':
-          return `border-2 border-gray-300 bg-white rounded-md ${focusRing} ${baseFocusBorder} ${errorClasses} ${disabledClasses}`;
-        case 'ghost':
-          return `border border-transparent bg-transparent hover:bg-gray-50 rounded-md focus:bg-white ${focusRing} ${baseFocusBorder} ${errorClasses} ${disabledClasses}`;
+          return `border-2 border-gray-300 bg-white rounded-md focus:outline-none ${ringOnFocus} ${baseFocusBorder} ${errorClasses} ${disabledClasses}`;
+
+        case 'ghost': {
+          const base = 'border-transparent bg-transparent rounded-md';
+          const hover = 'hover:bg-gray-100';
+          const focus = disableFocusStyles
+            ? 'focus:outline-none'
+            : `focus:outline-none border ${baseFocusBorder}`;
+          return `${base} ${hover} ${focus} ${ringOnFocus} ${errorClasses} ${disabledClasses}`;
+        }
         case 'floating':
-          return `border border-gray-300 bg-white rounded-md ${focusRing} ${baseFocusBorder} ${errorClasses} ${disabledClasses}`;
+          return `border border-gray-300 bg-white rounded-md focus:outline-none ${ringOnFocus} ${baseFocusBorder} ${errorClasses} ${disabledClasses}`;
+
         case 'inset':
-          return `border border-gray-300 bg-white rounded-md pt-5 pb-3 ${focusRing} ${baseFocusBorder} ${errorClasses} ${disabledClasses}`;
+          return `border border-gray-300 bg-white rounded-md pt-5 pb-3 focus:outline-none ${ringOnFocus} ${baseFocusBorder} ${errorClasses} ${disabledClasses}`;
+
         case 'default':
         default:
-          return `block w-full rounded-md border border-gray-300 ${focusRing} ${baseFocusBorder} disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 transition-colors ${errorClasses} ${disabledClasses}`;
+          return `rounded-md border border-gray-300 focus:outline-none ${ringOnFocus} ${baseFocusBorder} disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 transition-colors ${errorClasses} ${disabledClasses}`;
       }
     };
 
@@ -289,9 +373,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       if (inlineAddOn?.position === 'left') leftPadding = 'pl-8';
       else if (inlineAddOn?.position === 'right') rightPadding = 'pr-8';
 
-      if (endIcon && !rightPadding) rightPadding = 'pr-10';
-      if (startIcon && !leftPadding) leftPadding = 'pl-10';
-
       return `${leftPadding} ${rightPadding}`.trim();
     };
 
@@ -322,28 +403,51 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       );
     };
 
+    // Inset amount so inlineSelect doesn't cover the input border
+    const borderInsetPx = variant === 'outlined' ? 2 : 1;
+
     // Render inline select with reusable Select component
     const renderInlineSelect = () => {
       if (!inlineSelect) return null;
       const position = inlineSelect.position || 'left';
-      const positionClasses =
-        position === 'left'
-          ? 'absolute inset-y-0 left-0 flex items-center text-gray-500'
-          : 'absolute inset-y-0 right-0 flex items-center text-gray-500';
+
+      // Inset by the border thickness and clip the child so its hover bg can't cover the input's border.
+      const basePos =
+        'absolute text-gray-500 overflow-hidden flex items-stretch'; // items-stretch for full height + overflow-hidden to clip hover bg
+
+      const leftPos = `${basePos} rounded-l-md`; // clip on left curve
+      const rightPos = `${basePos} rounded-r-md`; // clip on right curve
+
       return (
-        <div className={positionClasses}>
-          <div className="h-full flex items-center">
-            <Select
-              options={inlineSelect.options}
-              value={inlineSelect.value}
-              onChange={(value) => inlineSelect.onChange?.(value)}
-              placeholder={inlineSelect.placeholder}
-              disabled={disabled}
-              size="sm"
-              variant="ghost"
-              className="border-0 bg-transparent shadow-none min-w-[80px] w-auto max-w-[120px]"
-            />
-          </div>
+        <div
+          className={position === 'left' ? leftPos : rightPos}
+          ref={position === 'left' ? inlineSelectLeftRef : inlineSelectRightRef}
+          // Inline style to handle 1px or 2px border thickness per variant
+          style={
+            position === 'left'
+              ? {
+                  top: borderInsetPx,
+                  bottom: borderInsetPx,
+                  left: borderInsetPx,
+                }
+              : {
+                  top: borderInsetPx,
+                  bottom: borderInsetPx,
+                  right: borderInsetPx,
+                }
+          }
+        >
+          {/* Full-height, no border/shadow so it feels embedded */}
+          <Select
+            options={inlineSelect.options}
+            value={inlineSelect.value}
+            onChange={(value) => inlineSelect.onChange?.(value)}
+            placeholder={inlineSelect.placeholder}
+            disabled={disabled}
+            size="sm"
+            variant="ghost"
+            className="h-full border-0 bg-transparent shadow-none min-w-[80px] w-auto max-w-[140px]"
+          />
         </div>
       );
     };
@@ -359,6 +463,31 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       return <div className={positionClasses}>{inlineLabel.text}</div>;
     };
 
+    // Start/end adornments (measured via refs)
+    const renderStartAdornment = () => {
+      if (!startAdornment) return null;
+      return (
+        <div
+          ref={startAdornmentRef}
+          className="absolute inset-y-0 left-0 flex items-center px-3 text-gray-500"
+        >
+          {startAdornment}
+        </div>
+      );
+    };
+
+    const renderEndAdornment = () => {
+      if (!endAdornment) return null;
+      return (
+        <div
+          ref={endAdornmentRef}
+          className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500"
+        >
+          {endAdornment}
+        </div>
+      );
+    };
+
     // Check if we need flex wrapper (for inline add-on or button)
     const needsFlexWrapper = inlineAddOn || inlineButton;
 
@@ -372,6 +501,25 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           : 'rounded-r-none'
         : ''
     } ${needsFlexWrapper ? 'focus:z-10' : ''} peer ${className}`;
+
+    // Inline styles that reserve space for inlineSelect/adornments/icons
+    const inputInlineStyle: React.CSSProperties = {};
+    if (inlineSelect?.position === 'left' || startIcon || startAdornment) {
+      inputInlineStyle.paddingLeft = `${
+        padLeftPx || fallbackSelectPadPx[inputSize]
+      }px`;
+    }
+    if (inlineSelect?.position === 'right' || endIcon || endAdornment) {
+      inputInlineStyle.paddingRight = `${
+        padRightPx || fallbackSelectPadPx[inputSize]
+      }px`;
+    }
+
+    // Align the label with the text start when a left affix exists (inlineSelect/adornment/icon)
+    const labelInlineStyle: React.CSSProperties | undefined =
+      inlineSelect?.position === 'left' || startIcon || startAdornment
+        ? { left: `${padLeftPx || fallbackSelectPadPx[inputSize]}px` }
+        : undefined;
 
     // Container classes with width control
     const containerClasses = `${fullWidth ? 'w-full' : width ? width : 'w-64'}`;
@@ -408,13 +556,14 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {/* Left side add-on */}
             {inlineAddOn?.position === 'left' && renderInlineAddOn()}
 
-            {/* Input + animated label */}
+            {/* Input with relative positioning for overlays */}
             <div className="relative flex-1">
               {/* Floating/Inset Label */}
               {label && ['floating', 'inset'].includes(variant) && (
                 <label
                   htmlFor={inputId}
                   className={getLabelClasses()}
+                  style={labelInlineStyle}
                 >
                   {label}
                   {required && <span className="text-red-500 ml-1">*</span>}
@@ -426,6 +575,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
               {/* Inline Label */}
               {renderInlineLabel()}
+
+              {/* Start Adornment */}
+              {renderStartAdornment()}
 
               {/* Start Icon */}
               {startIcon && (
@@ -447,12 +599,16 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 </div>
               )}
 
+              {/* End Adornment */}
+              {renderEndAdornment()}
+
               {/* Input */}
               <input
                 ref={ref}
                 id={inputId}
                 type={type}
                 className={`${inputClasses} peer`}
+                style={inputInlineStyle}
                 placeholder={effectivePlaceholder}
                 disabled={disabled}
                 required={required}
@@ -480,6 +636,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               <label
                 htmlFor={inputId}
                 className={getLabelClasses()}
+                style={labelInlineStyle}
               >
                 {label}
                 {required && <span className="text-red-500 ml-1">*</span>}
@@ -491,6 +648,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
             {/* Inline Label */}
             {renderInlineLabel()}
+
+            {/* Start Adornment */}
+            {renderStartAdornment()}
 
             {/* Start Icon */}
             {startIcon && (
@@ -512,12 +672,16 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               </div>
             )}
 
+            {/* End Adornment */}
+            {renderEndAdornment()}
+
             {/* Input */}
             <input
               ref={ref}
               id={inputId}
               type={type}
               className={`${inputClasses} peer`}
+              style={inputInlineStyle}
               placeholder={effectivePlaceholder}
               disabled={disabled}
               required={required}
