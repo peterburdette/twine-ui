@@ -29,6 +29,7 @@ export interface SelectProps
   required?: boolean;
   showFocusRing?: boolean;
   id?: string;
+  containerClassName?: string;
   className?: string;
 }
 
@@ -50,6 +51,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       required = false,
       showFocusRing = false,
       id,
+      containerClassName,
       className = '',
       ...props
     },
@@ -191,6 +193,12 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
 
     // --- Styling -------------------------------------------------------------
 
+    const wrapperClasses = cn(
+      'min-w-0',
+      fullWidth ? 'block w-full flex-1' : 'inline-block',
+      containerClassName
+    );
+
     const sizeClasses = {
       sm: 'px-2.5 py-1.5 text-sm',
       md: 'px-3 py-2 text-base',
@@ -222,7 +230,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       variantClasses[variant],
       errorClasses,
       disabledClasses,
-      // Width behavior
+      // Width behavior:
       fullWidth ? 'w-full' : 'inline-flex',
       !autoWidth && !fullWidth && 'min-w-[120px]',
       showFocusRing && 'focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
@@ -452,7 +460,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
     return (
       <div
         ref={selectRef}
-        className={cn(fullWidth ? 'block w-full' : 'inline-block')}
+        className={wrapperClasses}
         {...props}
       >
         {label && (
