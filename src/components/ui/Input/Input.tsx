@@ -1,7 +1,14 @@
 'use client';
 
 import type React from 'react';
-import { forwardRef, useEffect, useId, useState } from 'react';
+import {
+  forwardRef,
+  useEffect,
+  useId,
+  useState,
+  useLayoutEffect,
+  useRef,
+} from 'react';
 import { useFormControl } from '../FormControl/FormControl';
 import { Select } from '../Select/Select';
 
@@ -109,6 +116,17 @@ const sizeScale = {
   lg: { text: 'text-lg', iconBox: 'w-6 h-6', label: 'text-base' },
   xl: { text: 'text-xl', iconBox: 'w-7 h-7', label: 'text-lg' },
 } as const;
+
+/** Start adornment: smaller assumed box + tighter gap so value/placeholder aren't overly indented */
+const START_ADORN_BOX_PX = { xs: 10, sm: 12, md: 16, lg: 18, xl: 20 } as const;
+const START_TEXT_GAP = 8;
+
+/** Right-side adornments can stay a bit roomier (unchanged) */
+const END_ADORN_BOX_PX = { xs: 28, sm: 32, md: 36, lg: 40, xl: 44 } as const;
+
+const INLINE_LABEL_BOX_PX = { xs: 28, sm: 32, md: 36, lg: 40, xl: 44 } as const; // short inline label
+const INLINE_SELECT_MIN_W = 80; // matches min-w-[80px]
+const INLINE_SELECT_MAX_W = 140; // matches max-w-[140px]
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
   (
@@ -239,24 +257,82 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
     const containerClasses = `${fullWidth ? 'w-full' : width ? width : 'w-64'}`;
 
-    /** Flush-corner logic for wrapper (removes inner rounding where something abuts) */
-    const leftFlush =
-      inlineAddOn?.position === 'left' || inlineSelect?.position === 'left';
-
-    const rightFlush =
-      inlineAddOn?.position === 'right' ||
-      inlineSelect?.position === 'right' ||
-      !!inlineButton;
+    /** Flush-corner logic for wrapper.
+     * Keep wrapper rounding when inlineSelect is present so the select's OUTER corners remain rounded.
+     */
+    const leftFlush = inlineAddOn?.position === 'left';
+    const rightFlush = inlineAddOn?.position === 'right' || !!inlineButton;
 
     // Wrapper base + variant, then override side rounding if needed
-    const wrapperBase = `relative ${overflowCls} transition-colors ${variantCls}`;
+    const wrapperBase = `group relative ${overflowCls} transition-colors ${variantCls}`;
     const wrapperClasses = `${wrapperBase} ${className} ${
       leftFlush ? 'rounded-l-none' : ''
     } ${rightFlush ? 'rounded-r-none' : ''}`;
 
-    /** Deterministic input padding for icon scenarios */
-    const pl = startIcon ? reserveForIcon(inputSize) : BORDER_GAP;
-    const pr = endIcon ? reserveForIcon(inputSize) : BORDER_GAP;
+    /** ---------- InlineSelect width measurement (only) to avoid over/under indent on number type ---------- */
+    const leftSelectRef = useRef<HTMLDivElement | null>(null);
+    const rightSelectRef = useRef<HTMLDivElement | null>(null);
+    const [leftSelectW, setLeftSelectW] = useState(0);
+    const [rightSelectW, setRightSelectW] = useState(0);
+
+    useLayoutEffect(() => {
+      const L = leftSelectRef.current;
+      const R = rightSelectRef.current;
+
+      const measure = () => {
+        if (L) setLeftSelectW(L.offsetWidth || 0);
+        if (R) setRightSelectW(R.offsetWidth || 0);
+      };
+      measure();
+
+      const RO = (window as any).ResizeObserver
+        ? new ResizeObserver(measure)
+        : null;
+      if (RO && L) RO.observe(L);
+      if (RO && R) RO.observe(R);
+      return () => {
+        if (RO && L) RO.unobserve(L);
+        if (RO && R) RO.unobserve(R);
+      };
+      // re-check when side flips
+    }, [inlineSelect?.position]);
+
+    /** Deterministic input padding for inline/icon scenarios (both sides) */
+    const leftPadCandidates: number[] = [
+      BORDER_GAP,
+      startIcon ? reserveForIcon(inputSize) : 0,
+      // Start adornment: smaller assumed width + tighter gap to reduce indent
+      startAdornment
+        ? BORDER_GAP + START_ADORN_BOX_PX[inputSize] + START_TEXT_GAP
+        : 0,
+      inlineLabel?.position === 'left'
+        ? BORDER_GAP + INLINE_LABEL_BOX_PX[inputSize] + TEXT_GAP
+        : 0,
+      // InlineSelect LEFT: use measured width when available; fallback to max bound
+      inlineSelect?.position === 'left'
+        ? BORDER_GAP +
+          (leftSelectW > 0 ? leftSelectW : INLINE_SELECT_MAX_W) +
+          TEXT_GAP
+        : 0,
+    ];
+
+    const rightPadCandidates: number[] = [
+      BORDER_GAP,
+      endIcon ? reserveForIcon(inputSize) : 0,
+      endAdornment ? BORDER_GAP + END_ADORN_BOX_PX[inputSize] + TEXT_GAP : 0,
+      inlineLabel?.position === 'right'
+        ? BORDER_GAP + INLINE_LABEL_BOX_PX[inputSize] + TEXT_GAP
+        : 0,
+      // InlineSelect RIGHT: use measured width when available; fallback to max bound
+      inlineSelect?.position === 'right'
+        ? BORDER_GAP +
+          (rightSelectW > 0 ? rightSelectW : INLINE_SELECT_MAX_W) +
+          TEXT_GAP
+        : 0,
+    ];
+
+    const pl = Math.max(...leftPadCandidates);
+    const pr = Math.max(...rightPadCandidates);
 
     /** Inline-computed wrapper min-height; give INSET a little extra */
     const wrapperMinH =
@@ -289,7 +365,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       focused ? 'text-blue-600' : err ? 'text-red-600' : 'text-gray-600'
     } bg-white px-1`;
 
-    // Inset label (xs active will be overridden to exactly 10px)
+    // Inset label (xs active will be overridden to exactly 8px)
     const insetBaseCls = `${commonLabelBase} ${
       err ? 'text-red-600' : 'text-gray-500'
     }`;
@@ -308,10 +384,10 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             style={
               isActive
                 ? {
-                    left: pl,
+                    left: pl, // align with text start
                     top: 0,
                     transform: 'translateY(-50%) scale(0.75)',
-                  } // centered on top border
+                  }
                 : { left: pl, top: '50%', transform: 'translateY(-50%)' }
             }
           >
@@ -321,7 +397,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         );
       }
 
-      // INSET: base sits a bit lower; active moved higher to clear value; xs uses explicit 8px font
+      // INSET: base sits a bit lower; active uses same 0.75 scale (xs uses explicit 8px)
       const isXS = inputSize === 'xs';
       const activeStyleXS = isXS
         ? {
@@ -329,7 +405,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             top: INSET_LABEL_ACTIVE_TOP_PX[inputSize],
             transform: 'none',
             transformOrigin: 'left top',
-            fontSize: '8px', // exact 8px for xs inset when shrunk
+            fontSize: '8px',
           }
         : {
             left: pl,
@@ -347,7 +423,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               ? activeStyleXS
               : {
                   left: pl,
-                  top: INSET_LABEL_BASE_TOP_PX[inputSize], // lower baseline
+                  top: INSET_LABEL_BASE_TOP_PX[inputSize],
                   transformOrigin: 'left top',
                 }
           }
@@ -359,24 +435,44 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     };
 
     /** Inline helpers */
-    // Render inline select with reusable Select component
+    // Inline Select with outer-corner rounding and inner divider
     const renderInlineSelect = () => {
       if (!inlineSelect) return null;
       const position = inlineSelect.position || 'left';
-      const cls = `absolute text-gray-500 overflow-hidden flex items-stretch ${
-        position === 'left' ? 'rounded-l-md left-0' : 'rounded-r-md right-0'
-      } inset-y-0`;
+      const isLeft = position === 'left';
+
+      const railBase =
+        'absolute inset-y-0 flex items-stretch bg-white overflow-hidden'; // bg matches wrapper
+      const railPos = isLeft ? 'left-0' : 'right-0';
+      const railRound = isLeft
+        ? 'rounded-l-md rounded-r-none'
+        : 'rounded-r-md rounded-l-none';
+      const railCls = `${railBase} ${railPos} ${railRound}`;
+
+      const dividerPos = isLeft ? 'right-0' : 'left-0';
+
       return (
-        <div className={cls}>
+        <div
+          ref={isLeft ? leftSelectRef : rightSelectRef}
+          className={railCls}
+        >
           <Select
             options={inlineSelect.options}
             value={inlineSelect.value}
-            onChange={(value) => inlineSelect.onChange?.(value)}
+            onChange={(v) => inlineSelect.onChange?.(v)}
             placeholder={inlineSelect.placeholder}
             disabled={disabled}
             size="sm"
             variant="ghost"
-            className="h-full border-0 bg-transparent shadow-none min-w-[80px] w-auto max-w-[140px]"
+            className={`h-full border-0 bg-transparent shadow-none min-w-[${INLINE_SELECT_MIN_W}px] w-auto max-w-[${INLINE_SELECT_MAX_W}px] ${
+              isLeft
+                ? 'rounded-l-md rounded-r-none'
+                : 'rounded-r-md rounded-l-none'
+            }`}
+          />
+          <span
+            aria-hidden
+            className={`absolute ${dividerPos} top-0 bottom-0 w-px bg-gray-300 group-focus-within:bg-blue-500`}
           />
         </div>
       );
@@ -479,7 +575,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 </div>
               )}
 
-              {/* Input (no border; wrapper owns visuals). Padding reserves icon space deterministically. */}
+              {/* Input (no border; wrapper owns visuals). Padding reserves icon/inline space deterministically. */}
               <input
                 ref={ref}
                 id={inputId}
