@@ -269,7 +269,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       leftFlush ? 'rounded-l-none' : ''
     } ${rightFlush ? 'rounded-r-none' : ''}`;
 
-    /** InlineSelect width measurement */
+    /** ---------- InlineSelect width measurement ---------- */
     const leftSelectRef = useRef<HTMLDivElement | null>(null);
     const rightSelectRef = useRef<HTMLDivElement | null>(null);
     const [leftSelectW, setLeftSelectW] = useState(0);
@@ -297,42 +297,32 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     }, [inlineSelect?.position, inlineSelect?.width]);
 
     /** Deterministic input padding for inline/icon scenarios (both sides) */
-    const leftPadCandidates: number[] = [
-      BORDER_GAP,
-      startIcon ? reserveForIcon(inputSize) : 0,
-      // Start adornment: smaller assumed width + tighter gap to reduce indent
-      startAdornment
-        ? BORDER_GAP + START_ADORN_BOX_PX[inputSize] + START_TEXT_GAP
-        : 0,
-      inlineLabel?.position === 'left'
-        ? BORDER_GAP + INLINE_LABEL_BOX_PX[inputSize] + TEXT_GAP
-        : 0,
-      // InlineSelect LEFT: use measured width when available; fallback to max bound
+    // NEW: compute occupied rail widths so we can stack spacing additively (no overlap)
+    const leftRailW =
       inlineSelect?.position === 'left'
-        ? BORDER_GAP +
-          (leftSelectW ||
-            (inlineSelect?.width ?? INLINE_SELECT_FIXED_W_DEFAULT)) +
-          TEXT_GAP
-        : 0,
-    ];
-
-    const rightPadCandidates: number[] = [
-      BORDER_GAP,
-      endIcon ? reserveForIcon(inputSize) : 0,
-      endAdornment ? BORDER_GAP + END_ADORN_BOX_PX[inputSize] + TEXT_GAP : 0,
-      inlineLabel?.position === 'right'
-        ? BORDER_GAP + INLINE_LABEL_BOX_PX[inputSize] + TEXT_GAP
-        : 0,
+        ? leftSelectW || (inlineSelect?.width ?? INLINE_SELECT_FIXED_W_DEFAULT)
+        : 0;
+    const rightRailW =
       inlineSelect?.position === 'right'
-        ? BORDER_GAP +
-          (rightSelectW ||
-            (inlineSelect?.width ?? INLINE_SELECT_FIXED_W_DEFAULT)) +
-          TEXT_GAP
-        : 0,
-    ];
+        ? rightSelectW || (inlineSelect?.width ?? INLINE_SELECT_FIXED_W_DEFAULT)
+        : 0;
+    const leftInlineLabelW =
+      inlineLabel?.position === 'left' ? INLINE_LABEL_BOX_PX[inputSize] : 0;
+    const rightInlineLabelW =
+      inlineLabel?.position === 'right' ? INLINE_LABEL_BOX_PX[inputSize] : 0;
 
-    const pl = Math.max(...leftPadCandidates);
-    const pr = Math.max(...rightPadCandidates);
+    // NEW: build paddings by stacking in the visual order from the border inward
+    let pl = BORDER_GAP;
+    if (leftRailW) pl += leftRailW + TEXT_GAP;
+    if (leftInlineLabelW) pl += leftInlineLabelW + TEXT_GAP;
+    if (startAdornment) pl += START_ADORN_BOX_PX[inputSize] + START_TEXT_GAP;
+    if (startIcon) pl += ICON_PX[inputSize] + TEXT_GAP;
+
+    let pr = BORDER_GAP;
+    if (rightRailW) pr += rightRailW + TEXT_GAP;
+    if (rightInlineLabelW) pr += rightInlineLabelW + TEXT_GAP;
+    if (endAdornment) pr += END_ADORN_BOX_PX[inputSize] + TEXT_GAP;
+    if (endIcon) pr += ICON_PX[inputSize] + TEXT_GAP;
 
     /** Wrapper min-height */
     const wrapperMinH =
@@ -384,7 +374,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             style={
               isActive
                 ? {
-                    left: pl,
+                    left: pl, // align with text start
                     top: 0,
                     transform: 'translateY(-50%) scale(0.75)',
                   }
@@ -534,16 +524,30 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
               {/* Start Adornment */}
               {startAdornment && (
-                <div className="absolute inset-y-0 left-0 flex items-center px-3 text-gray-500">
+                <div
+                  className="absolute inset-y-0 left-0 flex items-center px-3 text-gray-500"
+                  // NEW: push after left rail(s)
+                  style={{ left: leftRailW + leftInlineLabelW }}
+                >
                   {startAdornment}
                 </div>
               )}
 
-              {/* Start Icon */}
+              {/* Start Icon — fixed 12px from border, centered in icon box */}
               {startIcon && (
                 <div
                   className="absolute inset-y-0 left-0 flex items-center justify-center pointer-events-none"
-                  style={{ left: BORDER_GAP, width: ICON_PX[inputSize] }}
+                  // NEW: push after left rail(s) and startAdornment footprint
+                  style={{
+                    left:
+                      BORDER_GAP +
+                      leftRailW +
+                      leftInlineLabelW +
+                      (startAdornment
+                        ? START_ADORN_BOX_PX[inputSize] + START_TEXT_GAP
+                        : 0),
+                    width: ICON_PX[inputSize],
+                  }}
                   aria-hidden="true"
                 >
                   <div
@@ -554,11 +558,21 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 </div>
               )}
 
-              {/* End Icon */}
+              {/* End Icon — fixed 12px from border, centered in icon box */}
               {endIcon && (
                 <div
                   className="absolute inset-y-0 right-0 flex items-center justify-center pointer-events-none"
-                  style={{ right: BORDER_GAP, width: ICON_PX[inputSize] }}
+                  // NEW: push after right rail(s) and endAdornment footprint
+                  style={{
+                    right:
+                      BORDER_GAP +
+                      rightRailW +
+                      rightInlineLabelW +
+                      (endAdornment
+                        ? END_ADORN_BOX_PX[inputSize] + TEXT_GAP
+                        : 0),
+                    width: ICON_PX[inputSize],
+                  }}
                   aria-hidden="true"
                 >
                   <div
@@ -571,12 +585,16 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
               {/* End Adornment */}
               {endAdornment && (
-                <div className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                <div
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500"
+                  // NEW: push after right rail(s)
+                  style={{ right: rightRailW + rightInlineLabelW }}
+                >
                   {endAdornment}
                 </div>
               )}
 
-              {/* Input */}
+              {/* Input (no border; wrapper owns visuals). Padding reserves icon/inline space deterministically. */}
               <input
                 ref={ref}
                 id={inputId}
@@ -640,7 +658,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
             {/* Start Adornment */}
             {startAdornment && (
-              <div className="absolute inset-y-0 left-0 flex items-center px-3 text-gray-500">
+              <div
+                className="absolute inset-y-0 left-0 flex items-center px-3 text-gray-500"
+                // NEW: push after left rail(s)
+                style={{ left: leftRailW + leftInlineLabelW }}
+              >
                 {startAdornment}
               </div>
             )}
@@ -649,7 +671,17 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {startIcon && (
               <div
                 className="absolute inset-y-0 left-0 flex items-center justify-center pointer-events-none"
-                style={{ left: BORDER_GAP, width: ICON_PX[inputSize] }}
+                // NEW: push after left rail(s) and startAdornment footprint
+                style={{
+                  left:
+                    BORDER_GAP +
+                    leftRailW +
+                    leftInlineLabelW +
+                    (startAdornment
+                      ? START_ADORN_BOX_PX[inputSize] + START_TEXT_GAP
+                      : 0),
+                  width: ICON_PX[inputSize],
+                }}
                 aria-hidden="true"
               >
                 <div
@@ -664,7 +696,15 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {endIcon && (
               <div
                 className="absolute inset-y-0 right-0 flex items-center justify-center pointer-events-none"
-                style={{ right: BORDER_GAP, width: ICON_PX[inputSize] }}
+                // NEW: push after right rail(s) and endAdornment footprint
+                style={{
+                  right:
+                    BORDER_GAP +
+                    rightRailW +
+                    rightInlineLabelW +
+                    (endAdornment ? END_ADORN_BOX_PX[inputSize] + TEXT_GAP : 0),
+                  width: ICON_PX[inputSize],
+                }}
                 aria-hidden="true"
               >
                 <div
@@ -677,7 +717,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
             {/* End Adornment */}
             {endAdornment && (
-              <div className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+              <div
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500"
+                // NEW: push after right rail(s)
+                style={{ right: rightRailW + rightInlineLabelW }}
+              >
                 {endAdornment}
               </div>
             )}
