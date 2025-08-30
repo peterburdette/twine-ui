@@ -51,8 +51,8 @@ export interface DataGridProps {
   onSortModelChange?: (sortModel: SortModel[]) => void;
   onFilterModelChange?: (filterRules: FilterRule[]) => void;
   className?: string;
-  hideToolbar?: boolean;
-  hideFooter?: boolean;
+  showToolbar?: boolean;
+  showFooter?: boolean;
   hideSearch?: boolean;
   hideFilters?: boolean;
   hideExport?: boolean;

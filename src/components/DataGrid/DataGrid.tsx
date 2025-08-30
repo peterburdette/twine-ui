@@ -9,6 +9,7 @@ import {
   useEffect,
   useImperativeHandle,
   forwardRef,
+  useId,
 } from 'react';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import { Input } from '../ui/Input/Input';
@@ -67,8 +68,8 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     onSortModelChange,
     onFilterModelChange,
     className = '',
-    hideToolbar = false,
-    hideFooter = false,
+    showToolbar = false,
+    showFooter = false,
     hideSearch = false,
     hideFilters = false,
     hideExport = false,
@@ -167,6 +168,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
   } | null>(null);
   const [editValue, setEditValue] = useState<any>(null); // preserve type during editing
 
+  // Live region for SR announcements
+  const [liveMessage, setLiveMessage] = useState('');
+
   // Filtered columns (Manage Columns popover)
   const filteredColumns = useMemo(() => {
     if (!columnSearchQuery) return columns;
@@ -212,8 +216,12 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
           : new Set(selectedRows);
         if (isSelected) newSelection.add(String(id));
         else newSelection.delete(String(id));
-        setSelectedRows(Array.from(newSelection));
-        onSelectionModelChange?.(Array.from(newSelection));
+        const arr = Array.from(newSelection);
+        setSelectedRows(arr);
+        onSelectionModelChange?.(arr);
+        setLiveMessage(
+          `${arr.length} row${arr.length === 1 ? '' : 's'} selected`
+        );
       },
       selectRows: (ids, isSelected = true, resetSelection = false) => {
         const newSelection = resetSelection
@@ -223,8 +231,12 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
           if (isSelected) newSelection.add(String(id));
           else newSelection.delete(String(id));
         });
-        setSelectedRows(Array.from(newSelection));
-        onSelectionModelChange?.(Array.from(newSelection));
+        const arr = Array.from(newSelection);
+        setSelectedRows(arr);
+        onSelectionModelChange?.(arr);
+        setLiveMessage(
+          `${arr.length} row${arr.length === 1 ? '' : 's'} selected`
+        );
       },
       selectRowRange: () => {
         console.warn('selectRowRange not fully implemented');
@@ -241,10 +253,12 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
         );
         setSelectedRows(allIds);
         onSelectionModelChange?.(allIds);
+        setLiveMessage(`All ${allIds.length} rows selected on this page`);
       },
       deselectAll: () => {
         setSelectedRows([]);
         onSelectionModelChange?.([]);
+        setLiveMessage('Selection cleared');
       },
       isRowSelected: (id) => selectedRows.includes(String(id)),
       getSelectedRowIds: () => Array.from(selectedRows),
@@ -252,6 +266,11 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
         const newSelection = model.map((id) => String(id));
         setSelectedRows(newSelection);
         onSelectionModelChange?.(model.map((id) => String(id)));
+        setLiveMessage(
+          `${newSelection.length} row${
+            newSelection.length === 1 ? '' : 's'
+          } selected`
+        );
       },
 
       // Column methods
@@ -288,6 +307,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
         }));
         setSortModel(newSortModel);
         onSortModelChange?.(newSortModel);
+        const s = newSortModel[0];
+        if (s) setLiveMessage(`Sorted by ${s.field} ${s.sort}`);
+        else setLiveMessage('Sorting cleared');
       },
       sortColumn: (
         field,
@@ -298,6 +320,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
           const newSortModel = sortModel.filter((sort) => sort.field !== field);
           setSortModel(newSortModel);
           onSortModelChange?.(newSortModel);
+          setLiveMessage('Sorting cleared');
           return;
         }
         const newSort = { field, sort: direction };
@@ -306,6 +329,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
           : [newSort];
         setSortModel(newSortModel);
         onSortModelChange?.(newSortModel);
+        setLiveMessage(`Sorted by ${field} ${direction}`);
       },
 
       // Filtering methods
@@ -335,6 +359,13 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
           }));
         setFilterRules(newRules);
         onFilterModelChange?.(newRules);
+        setLiveMessage(
+          newRules.length
+            ? `${newRules.length} filter${
+                newRules.length === 1 ? '' : 's'
+              } applied`
+            : 'All filters cleared'
+        );
       },
       setQuickFilterValues: (values: string[]) =>
         setSearchQuery(values.join(' ')),
@@ -346,11 +377,16 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
       setPaginationModel: (model) => {
         setPage(model.page);
         setCurrentPageSize(model.pageSize);
+        setLiveMessage(`Page ${model.page + 1}, page size ${model.pageSize}`);
       },
-      setPage: (newPage) => setPage(newPage),
+      setPage: (newPage) => {
+        setPage(newPage);
+        setLiveMessage(`Page ${newPage + 1}`);
+      },
       setPageSize: (newPageSize) => {
         setCurrentPageSize(newPageSize);
         setPage(0);
+        setLiveMessage(`Page size ${newPageSize}`);
       },
 
       // Export methods
@@ -598,6 +634,8 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     else newSortModel = [];
     setSortModel(newSortModel);
     onSortModelChange?.(newSortModel);
+    const s = newSortModel[0];
+    setLiveMessage(s ? `Sorted by ${s.field} ${s.sort}` : 'Sorting cleared');
   };
 
   // Match editor font-size to grid density so text doesn't grow/shrink on edit
@@ -634,6 +672,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
       }
       const next = Array.from(set);
       onSelectionModelChange?.(next);
+      setLiveMessage(
+        `${next.length} row${next.length === 1 ? '' : 's'} selected`
+      );
       return next;
     });
   };
@@ -646,6 +687,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
         else set.delete(rowId);
         const next = Array.from(set);
         onSelectionModelChange?.(next);
+        setLiveMessage(
+          `${next.length} row${next.length === 1 ? '' : 's'} selected`
+        );
         return next;
       });
     },
@@ -825,11 +869,13 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     onRowsChange?.(updatedRows);
     setEditingCell(null);
     setEditValue(null);
+    setLiveMessage(`Edited ${String(field)} for row ${String(rowId)}`);
   };
 
   const handleEditCancel = () => {
     setEditingCell(null);
     setEditValue(null);
+    setLiveMessage('Edit canceled');
   };
 
   const handleEditKeyDown = (e: React.KeyboardEvent) => {
@@ -887,6 +933,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
       return (
         <Input
           type="number"
+          aria-label="Edit value"
           value={editValue ?? ''}
           onChange={(e) =>
             setEditValue(e.target.value === '' ? '' : Number(e.target.value))
@@ -900,6 +947,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     return (
       <Input
         type="text"
+        aria-label="Edit value"
         value={editValue ?? ''}
         onChange={(e) => setEditValue(e.target.value)}
         {...commonProps}
@@ -1027,10 +1075,22 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     if (showFilterPopover) setTempFilterRules(filterRules);
   }, [showFilterPopover, filterRules]);
 
+  // SSR-stable base id for table + all derived child ids
+  const reactId = useId();
+  const tableId = useMemo(() => `dg-${reactId.replace(/:/g, '')}`, [reactId]);
+
   return (
     <div className={cn('border rounded-lg bg-white', className)}>
+      {/* Live region for SR updates */}
+      <div
+        aria-live="polite"
+        className="sr-only"
+      >
+        {liveMessage}
+      </div>
+
       {/* TOOLBAR */}
-      {!hideToolbar && (
+      {showToolbar && (
         <DataGridToolbar
           hideSearch={hideSearch}
           hideFilters={hideFilters}
@@ -1092,7 +1152,11 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
           className={`w-full ${getDensityClasses()}`}
           style={{ minWidth: 'max-content' }}
           ref={tableRef}
+          id={tableId}
         >
+          {/* Visually hidden caption gives the table a name for SRs */}
+          <caption className="sr-only">Data grid</caption>
+
           <thead className="bg-gray-50 border-b-2">
             <tr>
               {checkboxSelection &&
@@ -1101,6 +1165,8 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                 ).length > 0 && (
                   <th
                     className={`w-12 ${getHeaderPadding()} text-center border-r last:border-r-0`}
+                    id={`${tableId}-col-select`}
+                    scope="col"
                   >
                     <div className="flex items-center justify-center">
                       <Checkbox
@@ -1111,94 +1177,126 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                           handleSelectAll(e.target.checked);
                         }}
                         disabled={pageRowIds.length === 0}
+                        aria-label="Select all rows on this page"
                       />
                     </div>
                   </th>
                 )}
               {orderedColumns
                 .filter((col) => columnVisibility[col.field] !== false)
-                .map((column) => (
-                  <th
-                    key={column.field}
-                    className={`${getHeaderPadding()} text-left font-medium border-r last:border-r-0 relative group ${
-                      isDragging === column.field ? 'opacity-50' : ''
-                    }`}
-                    style={{
-                      width: columnWidths[column.field] || column.width || 150,
-                    }}
-                    onDragOver={
-                      enableColumnReorder
-                        ? (e) => {
-                            e.preventDefault();
-                            e.dataTransfer.dropEffect = 'move';
-                          }
-                        : undefined
-                    }
-                    onDrop={
-                      enableColumnReorder
-                        ? (e) => handleDrop(e, column.field)
-                        : undefined
-                    }
-                    onMouseEnter={() => setHoveredColumn(column.field)}
-                    onMouseLeave={() => setHoveredColumn(null)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1 flex-1 min-w-0">
-                        <span
-                          className={`truncate select-none ${
-                            enableColumnReorder
-                              ? 'cursor-grab active:cursor-grabbing'
-                              : ''
-                          }`}
-                          draggable={enableColumnReorder}
-                          onDragStart={
-                            enableColumnReorder
-                              ? (e) => handleDragStart(e, column.field)
-                              : undefined
-                          }
-                          onDragEnd={
-                            enableColumnReorder
-                              ? () => setIsDragging(null)
-                              : undefined
-                          }
-                        >
-                          {column.headerName}
-                        </span>
+                .map((column) => {
+                  const sortState = sortModel.find(
+                    (s) => s.field === column.field
+                  )?.sort;
+                  const ariaSort: React.AriaAttributes['aria-sort'] =
+                    column.sortable === false
+                      ? undefined
+                      : sortState === 'asc'
+                      ? 'ascending'
+                      : sortState === 'desc'
+                      ? 'descending'
+                      : 'none';
 
-                        {column.sortable !== false && (
-                          <button
-                            onClick={() => handleSort(column.field)}
-                            className={`ml-1 p-1 hover:bg-gray-200 rounded transition-opacity ${
-                              hoveredColumn === column.field ||
-                              sortModel.find((s) => s.field === column.field)
-                                ? 'opacity-100'
-                                : 'opacity-0'
+                  return (
+                    <th
+                      key={column.field}
+                      className={`${getHeaderPadding()} text-left font-medium border-r last:border-r-0 relative group ${
+                        isDragging === column.field ? 'opacity-50' : ''
+                      }`}
+                      style={{
+                        width:
+                          columnWidths[column.field] || column.width || 150,
+                      }}
+                      onDragOver={
+                        enableColumnReorder
+                          ? (e) => {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = 'move';
+                            }
+                          : undefined
+                      }
+                      onDrop={
+                        enableColumnReorder
+                          ? (e) => handleDrop(e, column.field)
+                          : undefined
+                      }
+                      onMouseEnter={() => setHoveredColumn(column.field)}
+                      onMouseLeave={() => setHoveredColumn(null)}
+                      id={`${tableId}-col-${column.field}`}
+                      scope="col"
+                      aria-sort={ariaSort}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <span
+                            className={`truncate select-none ${
+                              enableColumnReorder
+                                ? 'cursor-grab active:cursor-grabbing'
+                                : ''
                             }`}
+                            draggable={enableColumnReorder}
+                            onDragStart={
+                              enableColumnReorder
+                                ? (e) => handleDragStart(e, column.field)
+                                : undefined
+                            }
+                            onDragEnd={
+                              enableColumnReorder
+                                ? () => setIsDragging(null)
+                                : undefined
+                            }
                           >
-                            {sortModel.find((s) => s.field === column.field)
-                              ?.sort === 'asc' ? (
-                              <ChevronUp />
-                            ) : sortModel.find((s) => s.field === column.field)
-                                ?.sort === 'desc' ? (
-                              <ChevronDown />
-                            ) : (
-                              <ChevronUp />
-                            )}
-                          </button>
+                            {column.headerName}
+                          </span>
+
+                          {column.sortable !== false && (
+                            <button
+                              onClick={() => handleSort(column.field)}
+                              className={`ml-1 p-1 hover:bg-gray-200 rounded transition-opacity ${
+                                hoveredColumn === column.field ||
+                                sortModel.find((s) => s.field === column.field)
+                                  ? 'opacity-100'
+                                  : 'opacity-0'
+                              }`}
+                              aria-label={
+                                sortState === 'asc'
+                                  ? `Sort ${
+                                      column.headerName ?? column.field
+                                    } descending`
+                                  : sortState === 'desc'
+                                  ? `Clear sort on ${
+                                      column.headerName ?? column.field
+                                    }`
+                                  : `Sort ${
+                                      column.headerName ?? column.field
+                                    } ascending`
+                              }
+                              aria-controls={tableId}
+                            >
+                              {sortState === 'asc' ? (
+                                <ChevronUp aria-hidden="true" />
+                              ) : sortState === 'desc' ? (
+                                <ChevronDown aria-hidden="true" />
+                              ) : (
+                                <ChevronUp aria-hidden="true" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+
+                        {!disableColumnResize && (
+                          <div
+                            className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 opacity-0 hover:opacity-100 transition-opacity"
+                            onMouseDown={(e) =>
+                              handleResizeStart(e, column.field)
+                            }
+                            aria-hidden="true"
+                          />
                         )}
                       </div>
-
-                      {!disableColumnResize && (
-                        <div
-                          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 opacity-0 hover:opacity-100 transition-opacity"
-                          onMouseDown={(e) =>
-                            handleResizeStart(e, column.field)
-                          }
-                        />
-                      )}
-                    </div>
-                  </th>
-                ))}
+                    </th>
+                  );
+                })}
             </tr>
           </thead>
           <tbody>
@@ -1218,9 +1316,15 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                         width:
                           columnWidths[column.field] || column.width || 150,
                       }}
+                      headers={`${
+                        checkboxSelection ? `${tableId}-col-select ` : ''
+                      }${tableId}-col-${column.field}`}
                     >
                       <Input
                         placeholder={`Filter ${column.headerName}...`}
+                        aria-label={`Filter ${
+                          column.headerName ?? column.field
+                        }`}
                         value={filterModel[column.field] || ''}
                         onChange={(e) => {
                           const newValue = e.target.value;
@@ -1316,96 +1420,113 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                 </td>
               </tr>
             ) : (
-              paginatedRows.map((row) => (
-                <tr
-                  key={(row as any).id}
-                  className={`border-b border-gray-200 hover:bg-gray-50 ${
-                    selectedRows.includes(
-                      String((row as any)[idField as any] ?? (row as any).id)
-                    )
-                      ? 'bg-blue-50'
-                      : ''
-                  } ${!hideGridLines ? 'border-b' : ''}`}
-                  onClick={(e) => handleRowClick(row, e)}
-                  style={{
-                    cursor:
-                      checkboxSelectionOnRowClick && checkboxSelection
-                        ? 'pointer'
-                        : 'default',
-                  }}
-                >
-                  {checkboxSelection &&
-                    orderedColumns.filter(
-                      (col) => columnVisibility[col.field] !== false
-                    ).length > 0 && (
-                      <td
-                        className={`${getCellPadding()} ${
-                          !hideGridLines ? 'border-r' : ''
-                        } text-center`}
-                      >
-                        <div className="flex items-center justify-center">
-                          <Checkbox
-                            checked={selectedRows.includes(
-                              String(
-                                (row as any)[idField as any] ?? (row as any).id
-                              )
-                            )}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              handleRowSelection(
-                                String(
-                                  (row as any)[idField as any] ??
-                                    (row as any).id
-                                ),
-                                e.target.checked
-                              );
-                            }}
-                          />
-                        </div>
-                      </td>
-                    )}
-                  {orderedColumns
-                    .filter((col) => columnVisibility[col.field] !== false)
-                    .map((column) => {
-                      return (
+              paginatedRows.map((row) => {
+                const rowId = String(
+                  (row as any)[idField as any] ?? (row as any).id
+                );
+                const isSelected = selectedRows.includes(rowId);
+
+                return (
+                  <tr
+                    key={(row as any).id}
+                    className={`border-b border-gray-200 hover:bg-gray-50 ${
+                      isSelected ? 'bg-blue-50' : ''
+                    } ${!hideGridLines ? 'border-b' : ''}`}
+                    onClick={(e) => handleRowClick(row, e)}
+                    style={{
+                      cursor:
+                        checkboxSelectionOnRowClick && checkboxSelection
+                          ? 'pointer'
+                          : 'default',
+                    }}
+                    aria-selected={checkboxSelection ? isSelected : undefined}
+                  >
+                    {checkboxSelection &&
+                      orderedColumns.filter(
+                        (col) => columnVisibility[col.field] !== false
+                      ).length > 0 && (
                         <td
-                          key={column.field}
                           className={`${getCellPadding()} ${
-                            !hideGridLines ? 'border-r last:border-r-0' : ''
-                          } truncate ${
-                            column.align === 'center'
-                              ? 'text-center'
-                              : column.align === 'right'
-                              ? 'text-right'
-                              : 'text-left'
-                          } relative`}
-                          style={{
-                            width:
-                              columnWidths[column.field] || column.width || 150,
-                          }}
-                          onDoubleClick={() =>
+                            !hideGridLines ? 'border-r' : ''
+                          } text-center`}
+                          headers={`${tableId}-col-select`}
+                        >
+                          <div className="flex items-center justify-center">
+                            <Checkbox
+                              checked={isSelected}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleRowSelection(rowId, e.target.checked);
+                              }}
+                              aria-label={`Select row ${rowId}`}
+                            />
+                          </div>
+                        </td>
+                      )}
+                    {orderedColumns
+                      .filter((col) => columnVisibility[col.field] !== false)
+                      .map((column) => {
+                        const cellHeaders = `${
+                          checkboxSelection ? `${tableId}-col-select ` : ''
+                        }${tableId}-col-${column.field}`;
+
+                        const isCellEditable =
+                          column.editable === true && !column.valueGetter;
+
+                        const onCellKeyDown = (e: React.KeyboardEvent) => {
+                          if (e.key === 'Enter' && isCellEditable) {
+                            e.preventDefault();
                             handleCellDoubleClick(
-                              String(
-                                (row as any)[idField as any] ?? (row as any).id
-                              ),
+                              rowId,
                               column.field,
                               (row as any)[column.field]
-                            )
+                            );
                           }
-                        >
-                          {renderCell(row, column)}
-                        </td>
-                      );
-                    })}
-                </tr>
-              ))
+                        };
+
+                        return (
+                          <td
+                            key={column.field}
+                            className={`${getCellPadding()} ${
+                              !hideGridLines ? 'border-r last:border-r-0' : ''
+                            } truncate ${
+                              column.align === 'center'
+                                ? 'text-center'
+                                : column.align === 'right'
+                                ? 'text-right'
+                                : 'text-left'
+                            } relative`}
+                            style={{
+                              width:
+                                columnWidths[column.field] ||
+                                column.width ||
+                                150,
+                            }}
+                            onDoubleClick={() =>
+                              handleCellDoubleClick(
+                                rowId,
+                                column.field,
+                                (row as any)[column.field]
+                              )
+                            }
+                            headers={cellHeaders}
+                            tabIndex={0}
+                            onKeyDown={onCellKeyDown}
+                          >
+                            {renderCell(row, column)}
+                          </td>
+                        );
+                      })}
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
       </div>
 
       {/* FOOTER */}
-      {!hideFooter && (
+      {showFooter && (
         <DataGridFooter
           hideRowsPerPage={hideRowsPerPage}
           pageSizeOptions={pageSizeOptions}
@@ -1413,10 +1534,14 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
           onPageSizeChange={(n) => {
             setCurrentPageSize(n);
             setPage(0);
+            setLiveMessage(`Page size ${n}`);
           }}
           page={page}
           totalPages={totalPages}
-          onPageChange={setPage}
+          onPageChange={(p) => {
+            setPage(p);
+            setLiveMessage(`Page ${p + 1}`);
+          }}
           sortedRowsLength={sortedRows.length}
         />
       )}
