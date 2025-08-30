@@ -39,7 +39,7 @@ export interface SelectProps
   containerClassName?: string;
   className?: string;
   fixedTriggerWidth?: number;
-  maxTriggerWidthPx?: number;
+  maxTriggerWidth?: number;
   truncateTriggerLabel?: boolean;
 }
 
@@ -71,7 +71,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       containerClassName,
       className = '',
       fixedTriggerWidth,
-      maxTriggerWidthPx,
+      maxTriggerWidth,
       truncateTriggerLabel = false,
       ...props
     },
@@ -546,7 +546,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       ...(fixedTriggerWidth
         ? { width: fixedTriggerWidth, minWidth: fixedTriggerWidth }
         : undefined),
-      ...(maxTriggerWidthPx ? { maxWidth: maxTriggerWidthPx } : undefined),
+      ...(maxTriggerWidth ? { maxWidth: maxTriggerWidth } : undefined),
       paddingRight: caretPadRight,
     };
 
