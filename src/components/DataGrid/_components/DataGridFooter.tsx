@@ -35,6 +35,11 @@ const DataGridFooter: React.FC<DataGridFooterProps> = ({
   sortedRowsLength,
   className,
 }) => {
+  // Pre-compute display range and only show it when there are rows
+  const start = page * currentPageSize;
+  const from = Math.min(start + 1, sortedRowsLength);
+  const to = Math.min(start + currentPageSize, sortedRowsLength);
+
   return (
     <div
       className={`flex items-center justify-center p-4 border-t ${
@@ -61,14 +66,12 @@ const DataGridFooter: React.FC<DataGridFooterProps> = ({
       )}
 
       <div className="flex items-center gap-2">
-        <span className="text-sm text-gray-500">
-          {sortedRowsLength === 0
-            ? '0'
-            : `${page * currentPageSize + 1}-${Math.min(
-                (page + 1) * currentPageSize,
-                sortedRowsLength
-              )} of ${sortedRowsLength}`}
-        </span>
+        {/* Hide the range text when there are no rows */}
+        {sortedRowsLength > 0 && (
+          <span className="text-sm text-gray-500">
+            {from}-{to} of {sortedRowsLength}
+          </span>
+        )}
         <div className="flex items-center gap-1">
           <Button
             variant="outline"

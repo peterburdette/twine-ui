@@ -97,6 +97,10 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     setRows(initialRows);
   }, [initialRows]);
 
+  // Helper: resolve the row's primary key using idField (fallback to row.id)
+  const getRowId = (r: any) =>
+    String((r as any)[idField as any] ?? (r as any).id);
+
   const [page, setPage] = useState(0);
   const [currentPageSize, setCurrentPageSize] = useState(pageSize);
   const [sortModel, setSortModel] = useState<SortModel[]>([]);
@@ -184,21 +188,69 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     );
   }, [columns, columnSearchQuery]);
 
-  // API
+  // ---------- Data processing (filtering & quick search) ----------
+  const processedRows = useMemo(() => {
+    let filtered = rows;
+    if (searchQuery) {
+      filtered = filtered.filter((row) =>
+        Object.values(row).some((value) =>
+          String(value).toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      );
+    }
+    filterRules
+      .filter((rule) => rule.value != null && String(rule.value).trim() !== '')
+      .forEach((rule) => {
+        filtered = filtered.filter((row) => {
+          const cellValue = String(
+            (row as any)[rule.field] || ''
+          ).toLowerCase();
+          const filterValue = String(rule.value || '').toLowerCase();
+          switch (rule.operator) {
+            case 'contains':
+              return cellValue.includes(filterValue);
+            case 'equals':
+              return cellValue === filterValue;
+            case 'startsWith':
+              return cellValue.startsWith(filterValue);
+            case 'endsWith':
+              return cellValue.endsWith(filterValue);
+            case 'isEmpty':
+              return !cellValue || cellValue.trim() === '';
+            case 'isNotEmpty':
+              return cellValue && cellValue.trim() !== '';
+            default:
+              return cellValue.includes(filterValue);
+          }
+        });
+      });
+    Object.entries(filterModel).forEach(([field, filterValue]) => {
+      if (filterValue) {
+        filtered = filtered.filter((row) =>
+          String((row as any)[field])
+            .toLowerCase()
+            .includes(String(filterValue).toLowerCase())
+        );
+      }
+    });
+    return filtered;
+  }, [rows, searchQuery, filterModel, filterRules]);
+
+  // ---------- API (does NOT depend on sortedRows to avoid TDZ) ----------
   const api: GridApiRef = useMemo(
     () => ({
       getRow: (id: string | number) =>
-        rows.find((row) => row.id === id) || null,
+        processedRows.find((row) => getRowId(row) === String(id)) || null,
       getRowModels: () => {
         const map = new Map<string | number, GridRowModel>();
-        rows.forEach((row) => map.set(row.id, row));
+        processedRows.forEach((row) => map.set(getRowId(row), row));
         return map;
       },
-      getRowsCount: () => rows.length,
+      getRowsCount: () => processedRows.length,
       getSelectedRows: () => {
         const map = new Map<string | number, GridRowModel>();
         selectedRows.forEach((id) => {
-          const row = rows.find((r) => r.id === id);
+          const row = processedRows.find((r) => getRowId(r) === id);
           if (row) map.set(id, row);
         });
         return map;
@@ -249,9 +301,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
         api.selectRows(ids, false);
       },
       selectAll: () => {
-        const allIds = rows.map((row) =>
-          String((row as any)[idField as any] ?? (row as any).id)
-        );
+        const allIds = processedRows.map((row) => getRowId(row));
         setSelectedRows(allIds);
         onSelectionModelChange?.(allIds);
         setLiveMessage(`All ${allIds.length} rows selected on this page`);
@@ -374,7 +424,11 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
       hideFilterPanel: () => setShowFilterPopover(false),
 
       // Pagination methods
-      getPaginationModel: () => ({ page, pageSize: currentPageSize }),
+      getPaginationModel: () => ({
+        // When footer/controls are hidden, present a single "page" with all filtered rows
+        page: showFooter ? page : 0,
+        pageSize: showFooter ? currentPageSize : processedRows.length,
+      }),
       setPaginationModel: (model) => {
         setPage(model.page);
         setCurrentPageSize(model.pageSize);
@@ -413,12 +467,12 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
       // State methods
       getState: (): GridState => ({
         rows: {
-          dataRowIds: rows.map((row) => row.id),
-          dataRowIdToModelLookup: rows.reduce(
-            (acc, row) => ({ ...acc, [row.id]: row }),
+          dataRowIds: processedRows.map((row) => getRowId(row)),
+          dataRowIdToModelLookup: processedRows.reduce(
+            (acc, row) => ({ ...acc, [getRowId(row)]: row }),
             {}
           ),
-          totalRowCount: rows.length,
+          totalRowCount: processedRows.length,
         },
         columns: {
           all: columns.map((col) => col.field),
@@ -441,9 +495,15 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
           filteredRowsLookup: {},
         },
         pagination: {
-          paginationModel: { page, pageSize: currentPageSize },
-          rowCount: rows.length,
-          pageCount: Math.ceil(rows.length / currentPageSize),
+          paginationModel: {
+            page: showFooter ? page : 0,
+            pageSize: showFooter ? currentPageSize : processedRows.length,
+          },
+          rowCount: processedRows.length,
+          pageCount: Math.ceil(
+            processedRows.length /
+              (showFooter ? currentPageSize : processedRows.length || 1)
+          ),
         },
         selection: Array.from(selectedRows),
         focus: { cell: null, columnHeader: null },
@@ -458,7 +518,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
 
       // Utility methods
       getCellValue: (id, field) => {
-        const row = rows.find((r) => r.id === id);
+        const row = processedRows.find((r) => getRowId(r) === String(id));
         return row ? (row as any)[field] : null;
       },
       setCellValue: () => {
@@ -482,16 +542,17 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
       },
     }),
     [
-      rows,
-      columns,
+      processedRows,
       selectedRows,
-      sortModel,
-      filterRules,
+      columns,
       columnVisibility,
       columnOrder,
       columnWidths,
+      sortModel,
       page,
       currentPageSize,
+      showFooter,
+      hideGridLines,
     ]
   );
 
@@ -518,53 +579,6 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     density === 'compact' ? 'p-2' : density === 'comfortable' ? 'p-4' : 'p-3';
 
   /* Data processing */
-  const processedRows = useMemo(() => {
-    let filtered = rows;
-    if (searchQuery) {
-      filtered = filtered.filter((row) =>
-        Object.values(row).some((value) =>
-          String(value).toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      );
-    }
-    filterRules
-      .filter((rule) => rule.value != null && String(rule.value).trim() !== '')
-      .forEach((rule) => {
-        filtered = filtered.filter((row) => {
-          const cellValue = String(
-            (row as any)[rule.field] || ''
-          ).toLowerCase();
-          const filterValue = String(rule.value || '').toLowerCase();
-          switch (rule.operator) {
-            case 'contains':
-              return cellValue.includes(filterValue);
-            case 'equals':
-              return cellValue === filterValue;
-            case 'startsWith':
-              return cellValue.startsWith(filterValue);
-            case 'endsWith':
-              return cellValue.endsWith(filterValue);
-            case 'isEmpty':
-              return !cellValue || cellValue.trim() === '';
-            case 'isNotEmpty':
-              return cellValue && cellValue.trim() !== '';
-            default:
-              return cellValue.includes(filterValue);
-          }
-        });
-      });
-    Object.entries(filterModel).forEach(([field, filterValue]) => {
-      if (filterValue) {
-        filtered = filtered.filter((row) =>
-          String((row as any)[field])
-            .toLowerCase()
-            .includes(String(filterValue).toLowerCase())
-        );
-      }
-    });
-    return filtered;
-  }, [rows, searchQuery, filterModel, filterRules]);
-
   const sortedRows = useMemo(() => {
     if (sortModel.length === 0) return processedRows;
     return [...processedRows].sort((a, b) => {
@@ -573,7 +587,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
         let aVal: any, bVal: any;
         if (column?.valueGetter) {
           aVal = column.valueGetter({
-            id: (a as any).id || (a as any)[idField] || 0,
+            id: getRowId(a),
             row: a,
             field: sort.field,
             value: (a as any)[sort.field],
@@ -581,7 +595,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
             api,
           });
           bVal = column.valueGetter({
-            id: (b as any).id || (b as any)[idField] || 0,
+            id: getRowId(b),
             row: b,
             field: sort.field,
             value: (b as any)[sort.field],
@@ -600,21 +614,26 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
       }
       return 0;
     });
-  }, [processedRows, sortModel, columns]);
+  }, [processedRows, sortModel, columns, api, idField]);
+
+  // When the footer (pagination UI) is hidden, show *all* rows (no paging)
+  const effectivePageSize = showFooter
+    ? currentPageSize
+    : Number.MAX_SAFE_INTEGER;
+  const effectivePage = showFooter ? page : 0;
 
   const paginatedRows = useMemo(() => {
-    const startIndex = page * currentPageSize;
-    return sortedRows.slice(startIndex, startIndex + currentPageSize);
-  }, [sortedRows, page, currentPageSize]);
+    const startIndex = effectivePage * effectivePageSize;
+    return sortedRows.slice(startIndex, startIndex + effectivePageSize);
+  }, [sortedRows, effectivePage, effectivePageSize]);
 
-  const totalPages = Math.ceil(sortedRows.length / currentPageSize);
+  const totalPages = showFooter
+    ? Math.ceil(sortedRows.length / currentPageSize)
+    : 1;
 
   // Tri-state selection over the rows in the current page
   const pageRowIds = useMemo(
-    () =>
-      paginatedRows.map((row) =>
-        String((row as any)[idField as any] ?? (row as any).id)
-      ),
+    () => paginatedRows.map((row) => getRowId(row)),
     [paginatedRows, idField]
   );
   const selectedOnPageCount = useMemo(
@@ -857,7 +876,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     }
 
     const updatedRows = rows.map((row) =>
-      String((row as any)[idField as any] ?? (row as any).id) === String(rowId)
+      getRowId(row) === String(rowId)
         ? { ...(row as any), [field]: finalValue }
         : row
     );
@@ -963,7 +982,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
   const renderCell = (row: any, column: Column) => {
     const value = column.valueGetter
       ? column.valueGetter({
-          id: (row as any)[idField],
+          id: getRowId(row),
           row,
           field: column.field,
           value: (row as any)[column.field],
@@ -974,8 +993,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
 
     const isCellEditable = column.editable === true && !column.valueGetter;
     const isCurrentlyEditing =
-      editingCell?.rowId ===
-        String((row as any)[idField as any] ?? (row as any).id) &&
+      editingCell?.rowId === getRowId(row) &&
       editingCell?.field === column.field;
 
     if (isCurrentlyEditing) {
@@ -993,7 +1011,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
 
     if (column.renderCell) {
       return column.renderCell({
-        id: (row as any)[idField],
+        id: getRowId(row),
         value,
         row,
         field: column.field,
@@ -1011,7 +1029,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
         onDoubleClick={() => {
           if (isCellEditable) {
             setEditingCell({
-              rowId: String((row as any)[idField as any] ?? (row as any).id),
+              rowId: getRowId(row),
               field: column.field,
             });
             setEditValue(value);
@@ -1033,14 +1051,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     if (!checkboxSelection || !checkboxSelectionOnRowClick) return;
     const target = event.target as HTMLElement;
     if (isInteractiveTarget(target)) return;
-    if (
-      editingCell &&
-      String(editingCell.rowId) ===
-        String((row as any)[idField as any] ?? (row as any).id)
-    )
-      return;
+    if (editingCell && String(editingCell.rowId) === getRowId(row)) return;
 
-    const rowId = String((row as any)[idField as any] ?? (row as any).id);
+    const rowId = getRowId(row);
     const willBeChecked = !selectedRows.includes(rowId);
     handleRowSelection(rowId, willBeChecked);
   };
@@ -1432,14 +1445,12 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
               </tr>
             ) : (
               paginatedRows.map((row) => {
-                const rowId = String(
-                  (row as any)[idField as any] ?? (row as any).id
-                );
+                const rowId = getRowId(row);
                 const isSelected = selectedRows.includes(rowId);
 
                 return (
                   <tr
-                    key={(row as any).id}
+                    key={rowId}
                     className={`border-b border-gray-200 hover:bg-gray-50 ${
                       isSelected ? 'bg-blue-50' : ''
                     } ${!hideGridLines ? 'border-b' : ''}`}
