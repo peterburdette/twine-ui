@@ -1,7 +1,14 @@
 'use client';
 
 import type React from 'react';
-import { forwardRef, useState, useRef, useEffect, useId } from 'react';
+import {
+  forwardRef,
+  useState,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useId,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '../../../lib/utils';
@@ -24,14 +31,24 @@ export interface SelectProps
   disabled?: boolean;
   size?: 'sm' | 'md' | 'lg';
   variant?: 'default' | 'filled' | 'outlined' | 'ghost' | 'underline';
-  autoWidth?: boolean;
+  noMinWidth?: boolean;
   fullWidth?: boolean;
   required?: boolean;
   showFocusRing?: boolean;
   id?: string;
   containerClassName?: string;
   className?: string;
+  fixedTriggerWidth?: number;
+  maxTriggerWidthPx?: number;
+  truncateTriggerLabel?: boolean;
 }
+
+const ROW_H = { sm: 32, md: 36, lg: 44 } as const;
+
+const CARET_W = 16;
+const CARET_GAP = 8;
+const CARET_SAFETY = 4;
+const caretPadRight = CARET_W + CARET_GAP + CARET_SAFETY;
 
 const Select = forwardRef<HTMLDivElement, SelectProps>(
   (
@@ -46,13 +63,16 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       disabled = false,
       size = 'md',
       variant = 'default',
-      autoWidth = false,
+      noMinWidth = false,
       fullWidth = false,
       required = false,
       showFocusRing = false,
       id,
       containerClassName,
       className = '',
+      fixedTriggerWidth,
+      maxTriggerWidthPx,
+      truncateTriggerLabel = false,
       ...props
     },
     ref
@@ -64,7 +84,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       width: 0,
     });
 
-    // A11y: active (focused) option index while the popup is open
+    // A11y: active option index while popup is open
     const [activeIndex, setActiveIndex] = useState<number | null>(null);
     const typeaheadRef = useRef({ buffer: '', lastTime: 0 });
 
@@ -81,18 +101,98 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
     const selectedOption =
       selectedIndex >= 0 ? options[selectedIndex] : undefined;
 
-    // A11y: helper/error ids + describedby/errormessage
+    // A11y ids
     const helperId = helperText ? `${selectId}-help` : undefined;
     const errorText = typeof error === 'string' ? error : undefined;
     const errorId = errorText ? `${selectId}-error` : undefined;
     const describedBy =
       [helperId, errorId].filter(Boolean).join(' ') || undefined;
 
-    // --- Helpers -------------------------------------------------------------
+    /** ---------- Positioning & Width (longest option) ---------- */
 
-    const optionId = (index: number) => `${selectId}-opt-${index}`;
+    const measureLongestOptionWidth = (): number => {
+      if (typeof document === 'undefined') return 0;
+      const measurer = document.createElement('div');
+      measurer.style.position = 'fixed';
+      measurer.style.visibility = 'hidden';
+      measurer.style.pointerEvents = 'none';
+      measurer.style.top = '-9999px';
+      measurer.style.left = '-9999px';
+      measurer.style.whiteSpace = 'nowrap';
 
-    // Determine if an event originated inside the trigger or popup
+      const itemClass =
+        size === 'sm'
+          ? 'px-3 py-2 text-sm'
+          : size === 'lg'
+          ? 'px-4 py-3 text-lg'
+          : 'px-3 py-2 text-base';
+
+      const base = document.createElement('div');
+      base.className = `bg-white ${itemClass}`;
+      base.style.whiteSpace = 'nowrap';
+
+      let max = 0;
+      options.forEach((opt) => {
+        const row = base.cloneNode(false) as HTMLDivElement;
+        row.textContent = opt.label;
+        measurer.appendChild(row);
+      });
+
+      document.body.appendChild(measurer);
+      const checkReserve = 24;
+      measurer.childNodes.forEach((n) => {
+        const w = (n as HTMLElement).offsetWidth + checkReserve;
+        if (w > max) max = w;
+      });
+      document.body.removeChild(measurer);
+
+      return Math.ceil(max + 4); // border + tiny buffer
+    };
+
+    const computeAndSetPopupGeometry = () => {
+      if (!triggerRef.current) return;
+      const rect = triggerRef.current.getBoundingClientRect();
+
+      const estRowH = ROW_H[size] ?? 36;
+      const dropdownHeight = Math.min(
+        240,
+        Math.max(estRowH, options.length * estRowH)
+      );
+      const viewportH = window.innerHeight;
+
+      const spaceBelow = viewportH - rect.bottom;
+      const spaceAbove = rect.top;
+      const openUpward = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+
+      // Desired width = longest option (nowrap) but at least trigger width
+      const longest = measureLongestOptionWidth();
+      const desiredWidth = Math.max(rect.width, longest);
+
+      const margin = 8;
+      const viewportW = window.innerWidth;
+      let left = rect.left;
+      let width = desiredWidth;
+
+      if (left + width > viewportW - margin) {
+        left = Math.max(margin, viewportW - margin - width);
+        if (width > viewportW - margin * 2) {
+          width = viewportW - margin * 2; // clip; no horizontal scrollbar
+        }
+      }
+
+      setDropdownPosition({
+        top: openUpward ? rect.top - dropdownHeight - 4 : rect.bottom + 4,
+        left,
+        width,
+      });
+    };
+
+    useLayoutEffect(() => {
+      if (isOpen) computeAndSetPopupGeometry();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, options, size]);
+
+    // Close behavior: outside click / page scroll / resize
     const eventFromInside = (e: Event) => {
       const path = (e as any).composedPath?.() as EventTarget[] | undefined;
       const inPopupOrTrigger = (node: EventTarget) =>
@@ -114,36 +214,16 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       );
     };
 
-    // --- Positioning ---------------------------------------------------------
-
-    useEffect(() => {
-      if (isOpen && triggerRef.current) {
-        const rect = triggerRef.current.getBoundingClientRect();
-        const viewportHeight = window.innerHeight;
-        const dropdownHeight = Math.min(240, options.length * 40); // estimate
-        const spaceBelow = viewportHeight - rect.bottom;
-        const spaceAbove = rect.top;
-        const openUpward =
-          spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
-
-        setDropdownPosition({
-          top: openUpward ? rect.top - dropdownHeight - 4 : rect.bottom + 4,
-          left: rect.left,
-          width: rect.width,
-        });
-      }
-    }, [isOpen, options.length]);
-
     // Close behavior: outside click / page scroll / resize
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
-        if (eventFromInside(event)) return; // ignore clicks within trigger/popup
+        if (eventFromInside(event)) return;
         setIsOpen(false);
         setActiveIndex(null);
       };
 
       const handleScroll = (event: Event) => {
-        if (eventFromInside(event)) return; // ignore scrolls within popup/trigger
+        if (eventFromInside(event)) return;
         setIsOpen(false);
         setActiveIndex(null);
       };
@@ -176,22 +256,24 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
             ? selectedIndex
             : options.findIndex((o) => !o.disabled);
         setActiveIndex(initial >= 0 ? initial : null);
+        requestAnimationFrame(computeAndSetPopupGeometry);
       } else {
         // reset typeahead when closed
         typeaheadRef.current.buffer = '';
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, selectedIndex, options]);
 
     // Ensure active option is visible when it changes
     useEffect(() => {
       if (!isOpen || activeIndex == null || !listboxRef.current) return;
-      const activeEl = document.getElementById(optionId(activeIndex));
-      if (activeEl) {
-        activeEl.scrollIntoView({ block: 'nearest' });
-      }
-    }, [activeIndex, isOpen]);
+      const activeEl = document.getElementById(
+        `${selectId}-opt-${activeIndex}`
+      );
+      if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
+    }, [activeIndex, isOpen, selectId]);
 
-    // --- Styling -------------------------------------------------------------
+    /** ---------- Styling ---------- */
 
     const wrapperClasses = cn(
       'min-w-0',
@@ -225,25 +307,25 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       : 'cursor-pointer';
 
     const selectClasses = cn(
-      'relative flex items-center justify-between rounded-md transition-colors focus:outline-none',
+      'relative flex items-center rounded-md transition-colors focus:outline-none',
       sizeClasses[size],
       variantClasses[variant],
       errorClasses,
       disabledClasses,
-      // Width behavior:
       fullWidth ? 'w-full' : 'inline-flex',
-      !autoWidth && !fullWidth && 'min-w-[120px]',
+      !noMinWidth && !fullWidth && !fixedTriggerWidth && 'min-w-[120px]',
       showFocusRing && 'focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
       className
     );
 
-    // --- Selection & Keyboard ------------------------------------------------
+    /** ---------- Selection & Keyboard ---------- */
+
+    const optionId = (index: number) => `${selectId}-opt-${index}`;
 
     const handleOptionSelect = (optionValue: string) => {
       if (!disabled) {
         onChange?.(optionValue);
         setIsOpen(false);
-        // Keep focus on trigger for SR continuity
         requestAnimationFrame(() => triggerRef.current?.focus());
       }
     };
@@ -305,9 +387,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
         !event.metaKey &&
         !event.altKey
       ) {
-        if (!isOpen) {
-          setIsOpen(true);
-        }
+        if (!isOpen) setIsOpen(true);
         runTypeahead(key);
         event.preventDefault();
         return;
@@ -382,7 +462,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       }
     };
 
-    // --- Portal Popup --------------------------------------------------------
+    /** ---------- Portal Popup ---------- */
 
     const DropdownPortal = () => {
       if (!isOpen || typeof window === 'undefined') return null;
@@ -399,7 +479,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
           <div
             ref={listboxRef}
             id={listboxId}
-            className="fixed z-50 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto"
+            className="fixed z-50 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto overflow-x-hidden whitespace-nowrap"
             style={{
               top: dropdownPosition.top,
               left: dropdownPosition.left,
@@ -419,13 +499,14 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
               options.map((option, i) => {
                 const isSelected = value === option.value;
                 const isActive = activeIndex === i;
+
                 return (
                   <button
                     key={option.value}
                     id={optionId(i)}
                     type="button"
                     className={cn(
-                      'w-full flex items-center justify-between px-3 py-2 text-sm cursor-pointer transition-colors text-left',
+                      'w-full flex items-center px-3 py-2 text-sm cursor-pointer transition-colors text-left whitespace-nowrap',
                       option.disabled
                         ? 'opacity-50 cursor-not-allowed'
                         : 'hover:bg-gray-100',
@@ -441,10 +522,13 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
                     aria-selected={isSelected}
                     aria-disabled={option.disabled || undefined}
                   >
-                    <span className="truncate">{option.label}</span>
-                    {isSelected && (
-                      <Check className="h-4 w-4 text-blue-600 flex-shrink-0 ml-2" />
-                    )}
+                    <span className="flex-1">{option.label}</span>
+                    <span
+                      className="inline-block w-4 ml-2 text-right"
+                      aria-hidden="true"
+                    >
+                      {isSelected && <Check className="h-4 w-4" />}
+                    </span>
                   </button>
                 );
               })
@@ -455,7 +539,16 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       );
     };
 
-    // --- Render --------------------------------------------------------------
+    /** ---------- Render ---------- */
+
+    // Inline style ensures caret gutter always wins over Tailwind px classes
+    const triggerStyle: React.CSSProperties = {
+      ...(fixedTriggerWidth
+        ? { width: fixedTriggerWidth, minWidth: fixedTriggerWidth }
+        : undefined),
+      ...(maxTriggerWidthPx ? { maxWidth: maxTriggerWidthPx } : undefined),
+      paddingRight: caretPadRight,
+    };
 
     return (
       <div
@@ -491,17 +584,24 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
           aria-required={required || undefined}
           aria-disabled={disabled || undefined}
           tabIndex={disabled ? -1 : 0}
-          className={selectClasses}
+          className={cn(selectClasses, 'justify-start')}
           onClick={() => !disabled && setIsOpen((o) => !o)}
           onKeyDown={handleKeyDown}
           disabled={disabled}
+          style={triggerStyle}
         >
-          <span className={cn('truncate', !selectedOption && 'text-gray-500')}>
+          <span
+            className={cn(
+              'block min-w-0 flex-1 text-left',
+              truncateTriggerLabel && 'truncate',
+              !selectedOption && 'text-gray-500'
+            )}
+          >
             {selectedOption ? selectedOption.label : placeholder}
           </span>
           <ChevronDown
             className={cn(
-              'h-4 w-4 text-gray-400 transition-transform flex-shrink-0 ml-2',
+              'absolute right-2 h-4 w-4 text-gray-400 transition-transform pointer-events-none',
               isOpen && 'rotate-180'
             )}
             aria-hidden="true"

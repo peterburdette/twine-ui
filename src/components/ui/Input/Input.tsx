@@ -51,6 +51,7 @@ export interface InputProps
     onChange?: (value: string) => void;
     placeholder?: string;
     position?: 'left' | 'right';
+    width?: number;
   };
   inlineButton?: {
     label: string;
@@ -117,16 +118,15 @@ const sizeScale = {
   xl: { text: 'text-xl', iconBox: 'w-7 h-7', label: 'text-lg' },
 } as const;
 
-/** Start adornment: smaller assumed box + tighter gap so value/placeholder aren't overly indented */
+/** Start adornment tweaks */
 const START_ADORN_BOX_PX = { xs: 10, sm: 12, md: 16, lg: 18, xl: 20 } as const;
 const START_TEXT_GAP = 8;
 
-/** Right-side adornments can stay a bit roomier (unchanged) */
+/** Right-side adornments */
 const END_ADORN_BOX_PX = { xs: 28, sm: 32, md: 36, lg: 40, xl: 44 } as const;
 
-const INLINE_LABEL_BOX_PX = { xs: 28, sm: 32, md: 36, lg: 40, xl: 44 } as const; // short inline label
-const INLINE_SELECT_MIN_W = 80; // matches min-w-[80px]
-const INLINE_SELECT_MAX_W = 140; // matches max-w-[140px]
+const INLINE_LABEL_BOX_PX = { xs: 28, sm: 32, md: 36, lg: 40, xl: 44 } as const;
+const INLINE_SELECT_FIXED_W_DEFAULT = 70;
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
   (
@@ -174,7 +174,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
     const inputId = idProp || formControl?.inputId || `input-${stableId}`;
 
-    // === A11y: derive helper/error IDs and describedby ===
+    // A11y ids
     const helperId = helperText ? `${inputId}-help` : undefined;
     const errorText = typeof error === 'string' ? error : undefined;
     const errorId = errorText ? `${inputId}-error` : undefined;
@@ -218,7 +218,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         : '';
     const disabledCls = disabled ? 'opacity-50 cursor-not-allowed' : '';
     const overflowCls =
-      variant === 'floating' ? 'overflow-visible' : 'overflow-hidden'; // allow floating chip to cross border
+      variant === 'floating' ? 'overflow-visible' : 'overflow-hidden';
 
     const variantCls = (() => {
       const err = !!error;
@@ -269,7 +269,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       leftFlush ? 'rounded-l-none' : ''
     } ${rightFlush ? 'rounded-r-none' : ''}`;
 
-    /** ---------- InlineSelect width measurement (only) to avoid over/under indent on number type ---------- */
+    /** InlineSelect width measurement */
     const leftSelectRef = useRef<HTMLDivElement | null>(null);
     const rightSelectRef = useRef<HTMLDivElement | null>(null);
     const [leftSelectW, setLeftSelectW] = useState(0);
@@ -294,8 +294,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         if (RO && L) RO.unobserve(L);
         if (RO && R) RO.unobserve(R);
       };
-      // re-check when side flips
-    }, [inlineSelect?.position]);
+    }, [inlineSelect?.position, inlineSelect?.width]);
 
     /** Deterministic input padding for inline/icon scenarios (both sides) */
     const leftPadCandidates: number[] = [
@@ -311,7 +310,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       // InlineSelect LEFT: use measured width when available; fallback to max bound
       inlineSelect?.position === 'left'
         ? BORDER_GAP +
-          (leftSelectW > 0 ? leftSelectW : INLINE_SELECT_MAX_W) +
+          (leftSelectW ||
+            (inlineSelect?.width ?? INLINE_SELECT_FIXED_W_DEFAULT)) +
           TEXT_GAP
         : 0,
     ];
@@ -323,10 +323,10 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       inlineLabel?.position === 'right'
         ? BORDER_GAP + INLINE_LABEL_BOX_PX[inputSize] + TEXT_GAP
         : 0,
-      // InlineSelect RIGHT: use measured width when available; fallback to max bound
       inlineSelect?.position === 'right'
         ? BORDER_GAP +
-          (rightSelectW > 0 ? rightSelectW : INLINE_SELECT_MAX_W) +
+          (rightSelectW ||
+            (inlineSelect?.width ?? INLINE_SELECT_FIXED_W_DEFAULT)) +
           TEXT_GAP
         : 0,
     ];
@@ -334,12 +334,12 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     const pl = Math.max(...leftPadCandidates);
     const pr = Math.max(...rightPadCandidates);
 
-    /** Inline-computed wrapper min-height; give INSET a little extra */
+    /** Wrapper min-height */
     const wrapperMinH =
       WRAPPER_MIN_H_PX[inputSize] +
       (variant === 'inset' ? INSET_EXTRA_MIN_H_PX[inputSize] : 0);
 
-    /** Base input classes (no border; wrapper owns visuals; vertical padding inline) */
+    /** Base input classes (no border; wrapper owns visuals) */
     const inputClasses = `${sizeScale[inputSize].text} w-full bg-transparent outline-none border-0 text-gray-900 placeholder:text-gray-400 disabled:text-gray-500`;
 
     /** Vertical paddings (px) */
@@ -348,7 +348,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       (variant === 'inset' ? INSET_EXTRA_TOP_PX[inputSize] : 0);
     const pb = BASE_VPAD_PX[inputSize];
 
-    /** Floating/inset label classes — aligned and unclipped */
+    /** Floating/inset labels */
     const labelIsFloating = variant === 'floating' || variant === 'inset';
     const isActive = focused || hasValue;
     const err = !!error;
@@ -365,7 +365,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       focused ? 'text-blue-600' : err ? 'text-red-600' : 'text-gray-600'
     } bg-white px-1`;
 
-    // Inset label (xs active will be overridden to exactly 8px)
+    // Inset label
     const insetBaseCls = `${commonLabelBase} ${
       err ? 'text-red-600' : 'text-gray-500'
     }`;
@@ -384,7 +384,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             style={
               isActive
                 ? {
-                    left: pl, // align with text start
+                    left: pl,
                     top: 0,
                     transform: 'translateY(-50%) scale(0.75)',
                   }
@@ -397,7 +397,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         );
       }
 
-      // INSET: base sits a bit lower; active uses same 0.75 scale (xs uses explicit 8px)
+      // INSET
       const isXS = inputSize === 'xs';
       const activeStyleXS = isXS
         ? {
@@ -440,9 +440,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       if (!inlineSelect) return null;
       const position = inlineSelect.position || 'left';
       const isLeft = position === 'left';
+      const inlineSelectWidth =
+        inlineSelect.width ?? INLINE_SELECT_FIXED_W_DEFAULT;
 
       const railBase =
-        'absolute inset-y-0 flex items-stretch bg-white overflow-hidden'; // bg matches wrapper
+        'absolute inset-y-0 flex items-stretch bg-white overflow-hidden';
       const railPos = isLeft ? 'left-0' : 'right-0';
       const railRound = isLeft
         ? 'rounded-l-md rounded-r-none'
@@ -455,6 +457,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         <div
           ref={isLeft ? leftSelectRef : rightSelectRef}
           className={railCls}
+          style={{ width: inlineSelectWidth }}
         >
           <Select
             options={inlineSelect.options}
@@ -464,11 +467,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             disabled={disabled}
             size="sm"
             variant="ghost"
-            className={`h-full border-0 bg-transparent shadow-none min-w-[${INLINE_SELECT_MIN_W}px] w-auto max-w-[${INLINE_SELECT_MAX_W}px] ${
-              isLeft
-                ? 'rounded-l-md rounded-r-none'
-                : 'rounded-r-md rounded-l-none'
-            }`}
+            fixedTriggerWidth={inlineSelectWidth}
+            truncateTriggerLabel
+            className="h-full border-0 bg-transparent shadow-none"
           />
           <span
             aria-hidden
@@ -516,7 +517,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         {/* Row container (for inline add-on/button) */}
         {needsFlexWrapper ? (
           <div className="relative z-0 flex">
-            {/* Left side add-on */}
+            {/* Left add-on */}
             {inlineAddOn?.position === 'left' && renderInlineAddOn()}
 
             {/* Wrapper owns the border/background; min-height inline so INSET can be taller */}
@@ -538,7 +539,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 </div>
               )}
 
-              {/* Start Icon — fixed 12px from border, centered in icon box */}
+              {/* Start Icon */}
               {startIcon && (
                 <div
                   className="absolute inset-y-0 left-0 flex items-center justify-center pointer-events-none"
@@ -553,7 +554,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 </div>
               )}
 
-              {/* End Icon — fixed 12px from border, centered in icon box */}
+              {/* End Icon */}
               {endIcon && (
                 <div
                   className="absolute inset-y-0 right-0 flex items-center justify-center pointer-events-none"
@@ -575,7 +576,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 </div>
               )}
 
-              {/* Input (no border; wrapper owns visuals). Padding reserves icon/inline space deterministically. */}
+              {/* Input */}
               <input
                 ref={ref}
                 id={inputId}
@@ -609,7 +610,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               />
             </div>
 
-            {/* Right side add-on or button */}
+            {/* Right side add-on / button */}
             {inlineAddOn?.position === 'right' && renderInlineAddOn()}
             {inlineButton && (
               <button
@@ -716,7 +717,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           </div>
         )}
 
-        {/* Helper / Error Text (live region) */}
+        {/* Helper / Error Text */}
         {(helperText || errorText) && (
           <div
             id={errorText ? errorId : helperId}
