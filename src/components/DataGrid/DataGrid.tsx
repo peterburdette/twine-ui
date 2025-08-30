@@ -167,6 +167,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     field: string;
   } | null>(null);
   const [editValue, setEditValue] = useState<any>(null); // preserve type during editing
+  const editorInputRef = useRef<HTMLInputElement | null>(null);
 
   // Live region for SR announcements
   const [liveMessage, setLiveMessage] = useState('');
@@ -879,6 +880,9 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
   };
 
   const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    // prevent td’s onKeyDown from firing
+    e.stopPropagation();
+
     if (e.key === 'Enter') {
       e.preventDefault();
       handleEditSave();
@@ -913,6 +917,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
 
     // common props for Input (string/number)
     const commonProps = {
+      ref: editorInputRef,
       inputSize: editorInputSize as any, // keep font-size in sync with grid density
       variant: 'ghost' as const,
       fullWidth: true,
@@ -1074,6 +1079,12 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
   useEffect(() => {
     if (showFilterPopover) setTempFilterRules(filterRules);
   }, [showFilterPopover, filterRules]);
+
+  useEffect(() => {
+    if (editingCell) {
+      requestAnimationFrame(() => editorInputRef.current?.focus());
+    }
+  }, [editingCell]);
 
   // SSR-stable base id for table + all derived child ids
   const reactId = useId();
@@ -1474,6 +1485,14 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                           column.editable === true && !column.valueGetter;
 
                         const onCellKeyDown = (e: React.KeyboardEvent) => {
+                          // If this cell is already editing, ignore keydowns on the td
+                          if (
+                            editingCell &&
+                            editingCell.rowId === rowId &&
+                            editingCell.field === column.field
+                          ) {
+                            return;
+                          }
                           if (e.key === 'Enter' && isCellEditable) {
                             e.preventDefault();
                             handleCellDoubleClick(
