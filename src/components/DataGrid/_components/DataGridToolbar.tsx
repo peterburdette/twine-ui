@@ -150,7 +150,7 @@ const DataGridToolbar: React.FC<DataGridToolbarProps> = (props) => {
           <div className="relative">
             <Button
               ref={filterButtonRef}
-              variant="outline"
+              variant="outlined"
               size="sm"
               onClick={() => setShowFilterPopover(!showFilterPopover)}
               className="relative"
@@ -199,7 +199,7 @@ const DataGridToolbar: React.FC<DataGridToolbarProps> = (props) => {
           <div className="relative">
             <Button
               ref={exportButtonRef}
-              variant="outline"
+              variant="outlined"
               size="sm"
               onClick={() => setShowExportPopover(!showExportPopover)}
             >
@@ -223,7 +223,7 @@ const DataGridToolbar: React.FC<DataGridToolbarProps> = (props) => {
           <div className="relative">
             <Button
               ref={columnButtonRef}
-              variant="outline"
+              variant="outlined"
               size="sm"
               onClick={() => {
                 setTempColumnVisibility({ ...tempColumnVisibility });

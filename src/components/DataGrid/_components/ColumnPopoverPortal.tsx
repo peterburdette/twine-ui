@@ -100,7 +100,7 @@ const ColumnPopoverPortal: React.FC<ColumnPopoverPortalProps> = ({
 
         <div className="flex justify-between items-center pt-4 border-t">
           <Button
-            variant="outline"
+            variant="outlined"
             size="sm"
             onClick={() => {
               const allVisible = Object.values(tempColumnVisibility).every(
@@ -130,7 +130,7 @@ const ColumnPopoverPortal: React.FC<ColumnPopoverPortalProps> = ({
               : 'Show All'}
           </Button>
           <Button
-            variant="outline"
+            variant="outlined"
             size="sm"
             onClick={() => {
               const defaultVisibility = columns.reduce(

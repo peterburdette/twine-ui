@@ -158,7 +158,7 @@ const FilterPopoverPortal: React.FC<FilterPopoverPortalProps> = ({
 
         <div className="pt-3 mt-3 border-t flex items-center justify-between">
           <Button
-            variant="outline"
+            variant="outlined"
             size="sm"
             onClick={onAddFilter}
           >
@@ -167,7 +167,7 @@ const FilterPopoverPortal: React.FC<FilterPopoverPortalProps> = ({
 
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
+              variant="outlined"
               size="sm"
               disabled={!canClear}
               onClick={() => onClearTempFilters()}

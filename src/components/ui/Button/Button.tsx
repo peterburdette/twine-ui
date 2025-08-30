@@ -5,7 +5,7 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?:
     | 'default'
-    | 'outline'
+    | 'outlined'
     | 'ghost'
     | 'destructive'
     | 'secondary'
@@ -51,7 +51,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       default: `bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 disabled:hover:bg-blue-600 disabled:active:bg-blue-600 ${
         showFocusRing ? 'focus:ring-blue-500' : ''
       }`,
-      outline: `border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 active:bg-gray-100 disabled:hover:bg-white disabled:active:bg-white ${
+      outlined: `border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 active:bg-gray-100 disabled:hover:bg-white disabled:active:bg-white ${
         showFocusRing ? 'focus:ring-blue-500' : ''
       }`,
       ghost: `text-gray-700 hover:bg-gray-100 active:bg-gray-200 disabled:hover:bg-transparent disabled:active:bg-transparent ${

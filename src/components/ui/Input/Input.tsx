@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { useFormControl } from '../FormControl/FormControl';
 import { Select } from '../Select/Select';
+import Button from '../Button';
 
 export interface InputSelectOption {
   value: string;
@@ -134,7 +135,7 @@ const inlineButtonClasses = (
   disabled?: boolean
 ) => {
   const common =
-    'self-stretch flex items-center justify-center space-x-1 text-sm px-2.5 rounded-md rounded-l-none transition-colors ' +
+    'h-full self-stretch flex items-center justify-center space-x-1 text-sm px-2.5 rounded-md rounded-l-none transition-colors ' +
     (disabled ? 'opacity-50 cursor-not-allowed ' : 'cursor-pointer ');
 
   // The inline button is visually attached on the right; avoid double borders with the input wrapper.
@@ -669,19 +670,27 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {/* Right side add-on / button */}
             {inlineAddOn?.position === 'right' && renderInlineAddOn()}
             {inlineButton && (
-              <button
-                type="button"
-                onClick={inlineButton.onClick}
-                className={inlineButtonClasses(
-                  inlineButton.variant ?? 'default',
-                  disabled
-                )}
-                style={{ minHeight: wrapperMinH }}
-                disabled={disabled}
-              >
-                {inlineButton.icon && inlineButton.icon}
-                <span>{inlineButton.label}</span>
-              </button>
+              <div className="self-stretch">
+                <Button
+                  variant={
+                    inlineButton.variant === 'outlined'
+                      ? 'outlined'
+                      : inlineButton.variant ?? 'default'
+                  }
+                  onClick={inlineButton.onClick}
+                  className={
+                    `${inlineButtonClasses(
+                      inlineButton.variant ?? 'default',
+                      disabled
+                    )} ` + `h-full !py-0`
+                  }
+                  style={{ height: '100%' }}
+                  disabled={disabled}
+                >
+                  {inlineButton.icon && inlineButton.icon}
+                  <span>{inlineButton.label}</span>
+                </Button>
+              </div>
             )}
           </div>
         ) : (

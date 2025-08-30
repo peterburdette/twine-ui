@@ -74,7 +74,7 @@ const DataGridFooter: React.FC<DataGridFooterProps> = ({
         )}
         <div className="flex items-center gap-1">
           <Button
-            variant="outline"
+            variant="outlined"
             size="sm"
             onClick={() => onPageChange(0)}
             disabled={page === 0}
@@ -82,7 +82,7 @@ const DataGridFooter: React.FC<DataGridFooterProps> = ({
             <ChevronsLeft />
           </Button>
           <Button
-            variant="outline"
+            variant="outlined"
             size="sm"
             onClick={() => onPageChange(page - 1)}
             disabled={page === 0}
@@ -90,7 +90,7 @@ const DataGridFooter: React.FC<DataGridFooterProps> = ({
             <ChevronLeft />
           </Button>
           <Button
-            variant="outline"
+            variant="outlined"
             size="sm"
             onClick={() => onPageChange(page + 1)}
             disabled={page >= totalPages - 1}
@@ -98,7 +98,7 @@ const DataGridFooter: React.FC<DataGridFooterProps> = ({
             <ChevronRight />
           </Button>
           <Button
-            variant="outline"
+            variant="outlined"
             size="sm"
             onClick={() => onPageChange(totalPages - 1)}
             disabled={page >= totalPages - 1}
