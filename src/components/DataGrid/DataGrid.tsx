@@ -82,7 +82,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     hideGridLines = false,
     enableColumnReorder = false,
     enableColumnFilters = false,
-    disableColumnResize = false,
+    enableColumnResize = false,
     noDataMessage = 'No data available',
     apiRef,
     onCellValueChange,
@@ -1284,7 +1284,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
                           )}
                         </div>
 
-                        {!disableColumnResize && (
+                        {enableColumnResize && (
                           <div
                             className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 opacity-0 hover:opacity-100 transition-opacity"
                             onMouseDown={(e) =>

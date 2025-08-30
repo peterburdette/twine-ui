@@ -67,7 +67,7 @@ export interface DataGridProps {
   hideGridLines?: boolean;
   enableColumnReorder?: boolean;
   enableColumnFilters?: boolean;
-  disableColumnResize?: boolean;
+  enableColumnResize?: boolean;
   noDataMessage?: string | React.ReactNode;
   apiRef?: React.MutableRefObject<any>;
   isEditable?: boolean;
