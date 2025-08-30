@@ -57,7 +57,7 @@ export interface InputProps
     label: string;
     icon?: React.ReactNode;
     onClick: () => void;
-    variant?: 'default' | 'outline' | 'ghost';
+    variant?: 'default' | 'outlined' | 'ghost';
   };
   inlineLabel?: {
     text: string;
@@ -127,6 +127,44 @@ const END_ADORN_BOX_PX = { xs: 28, sm: 32, md: 36, lg: 40, xl: 44 } as const;
 
 const INLINE_LABEL_BOX_PX = { xs: 28, sm: 32, md: 36, lg: 40, xl: 44 } as const;
 const INLINE_SELECT_FIXED_W_DEFAULT = 70;
+
+/** variant -> class map for the inline button */
+const inlineButtonClasses = (
+  variant: 'default' | 'outlined' | 'ghost' = 'default',
+  disabled?: boolean
+) => {
+  const common =
+    'self-stretch flex items-center justify-center space-x-1 text-sm px-2.5 rounded-md rounded-l-none transition-colors ' +
+    (disabled ? 'opacity-50 cursor-not-allowed ' : 'cursor-pointer ');
+
+  // The inline button is visually attached on the right; avoid double borders with the input wrapper.
+  const attachedEdge = 'border-l-0';
+
+  switch (variant) {
+    case 'default':
+      // Solid primary
+      return (
+        common +
+        ` ${attachedEdge} border border-blue-600 bg-blue-600 text-white
+          hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`
+      );
+    case 'ghost':
+      // Borderless, subtle hover
+      return (
+        common +
+        ` ${attachedEdge} border border-transparent bg-transparent text-gray-700
+          hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`
+      );
+    case 'outlined':
+    default:
+      // Matches input wrapper visuals
+      return (
+        common +
+        ` ${attachedEdge} border border-gray-300 bg-white text-gray-700
+          hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`
+      );
+  }
+};
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
   (
@@ -297,7 +335,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     }, [inlineSelect?.position, inlineSelect?.width]);
 
     /** Deterministic input padding for inline/icon scenarios (both sides) */
-    // NEW: compute occupied rail widths so we can stack spacing additively (no overlap)
     const leftRailW =
       inlineSelect?.position === 'left'
         ? leftSelectW || (inlineSelect?.width ?? INLINE_SELECT_FIXED_W_DEFAULT)
@@ -311,7 +348,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     const rightInlineLabelW =
       inlineLabel?.position === 'right' ? INLINE_LABEL_BOX_PX[inputSize] : 0;
 
-    // NEW: build paddings by stacking in the visual order from the border inward
+    // build paddings by stacking in the visual order from the border inward
     let pl = BORDER_GAP;
     if (leftRailW) pl += leftRailW + TEXT_GAP;
     if (leftInlineLabelW) pl += leftInlineLabelW + TEXT_GAP;
@@ -506,7 +543,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
         {/* Row container (for inline add-on/button) */}
         {needsFlexWrapper ? (
-          <div className="relative z-0 flex">
+          // Items-stretch so the button matches the wrapper height
+          <div className="relative z-0 flex items-stretch">
             {/* Left add-on */}
             {inlineAddOn?.position === 'left' && renderInlineAddOn()}
 
@@ -526,7 +564,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               {startAdornment && (
                 <div
                   className="absolute inset-y-0 left-0 flex items-center px-3 text-gray-500"
-                  // NEW: push after left rail(s)
+                  // push after left rail(s)
                   style={{ left: leftRailW + leftInlineLabelW }}
                 >
                   {startAdornment}
@@ -537,7 +575,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               {startIcon && (
                 <div
                   className="absolute inset-y-0 left-0 flex items-center justify-center pointer-events-none"
-                  // NEW: push after left rail(s) and startAdornment footprint
+                  // push after left rail(s) and startAdornment footprint
                   style={{
                     left:
                       BORDER_GAP +
@@ -562,7 +600,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               {endIcon && (
                 <div
                   className="absolute inset-y-0 right-0 flex items-center justify-center pointer-events-none"
-                  // NEW: push after right rail(s) and endAdornment footprint
+                  // push after right rail(s) and endAdornment footprint
                   style={{
                     right:
                       BORDER_GAP +
@@ -587,7 +625,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               {endAdornment && (
                 <div
                   className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500"
-                  // NEW: push after right rail(s)
+                  // push after right rail(s)
                   style={{ right: rightRailW + rightInlineLabelW }}
                 >
                   {endAdornment}
@@ -634,7 +672,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               <button
                 type="button"
                 onClick={inlineButton.onClick}
-                className="flex items-center space-x-1 rounded-md rounded-l-none border border-l-0 border-gray-300 px-2.5 text-gray-700 hover:bg-gray-100"
+                className={inlineButtonClasses(
+                  inlineButton.variant ?? 'default',
+                  disabled
+                )}
+                style={{ minHeight: wrapperMinH }}
                 disabled={disabled}
               >
                 {inlineButton.icon && inlineButton.icon}
@@ -660,7 +702,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {startAdornment && (
               <div
                 className="absolute inset-y-0 left-0 flex items-center px-3 text-gray-500"
-                // NEW: push after left rail(s)
                 style={{ left: leftRailW + leftInlineLabelW }}
               >
                 {startAdornment}
@@ -671,7 +712,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {startIcon && (
               <div
                 className="absolute inset-y-0 left-0 flex items-center justify-center pointer-events-none"
-                // NEW: push after left rail(s) and startAdornment footprint
                 style={{
                   left:
                     BORDER_GAP +
@@ -696,7 +736,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {endIcon && (
               <div
                 className="absolute inset-y-0 right-0 flex items-center justify-center pointer-events-none"
-                // NEW: push after right rail(s) and endAdornment footprint
                 style={{
                   right:
                     BORDER_GAP +
@@ -719,7 +758,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {endAdornment && (
               <div
                 className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500"
-                // NEW: push after right rail(s)
                 style={{ right: rightRailW + rightInlineLabelW }}
               >
                 {endAdornment}
