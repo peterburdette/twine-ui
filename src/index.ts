@@ -20,6 +20,20 @@ export { DataGrid } from './components/DataGrid';
 export { FormControl } from './components/ui/FormControl';
 export { FormControlLabel } from './components/ui/FormControlLabel';
 
+// Card
+export {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+  CardActions,
+  CardMedia,
+  CardDivider,
+  CardSection,
+} from './components/ui/Card';
+
 // Export types
 export type {
   DialogProps,
@@ -47,6 +61,20 @@ export type {
 } from './types';
 export type { FormControlProps } from './components/ui/FormControl';
 export type { FormControlLabelProps } from './components/ui/FormControlLabel';
+
+// Card types
+export type {
+  CardProps,
+  CardHeaderProps,
+  CardContentProps,
+  CardFooterProps,
+  CardActionsProps,
+  CardMediaProps,
+  CardDividerProps,
+  CardSectionProps,
+  CardVariant,
+  CardPadding,
+} from './components/ui/Card/types';
 
 // Export API system
 export { useGridApiRef, createGridApiRef } from './hooks/useGridApiRef';
