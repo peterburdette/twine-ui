@@ -35,9 +35,7 @@ const Popover: React.FC<PopoverProps> = ({
   const isOpen = isControlled ? controlledOpen : internalOpen;
 
   const setOpen = (open: boolean) => {
-    if (!isControlled) {
-      setInternalOpen(open);
-    }
+    if (!isControlled) setInternalOpen(open);
     onOpenChange?.(open);
   };
 
@@ -73,66 +71,87 @@ const Popover: React.FC<PopoverProps> = ({
         break;
     }
 
-    // Adjust for viewport boundaries
-    if (left < 0) left = 8;
-    if (left + contentRect.width > viewport.width)
+    // Clamp to viewport
+    if (left < 8) left = 8;
+    if (left + contentRect.width > viewport.width) {
       left = viewport.width - contentRect.width - 8;
-    if (top < 0) top = 8;
-    if (top + contentRect.height > viewport.height)
+    }
+    if (top < 8) top = 8;
+    if (top + contentRect.height > viewport.height) {
       top = viewport.height - contentRect.height - 8;
+    }
 
     setPosition({ top, left });
   };
 
   useEffect(() => {
-    if (isOpen) {
-      calculatePosition();
-      window.addEventListener('resize', calculatePosition);
-      window.addEventListener('scroll', calculatePosition);
+    if (!isOpen) return;
+    calculatePosition();
 
-      return () => {
-        window.removeEventListener('resize', calculatePosition);
-        window.removeEventListener('scroll', calculatePosition);
-      };
-    }
+    const onResize = () => calculatePosition();
+    const onScroll = () => calculatePosition();
+
+    window.addEventListener('resize', onResize, { passive: true });
+    window.addEventListener('scroll', onScroll, {
+      passive: true,
+      capture: true,
+    });
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('scroll', onScroll, true);
+    };
   }, [isOpen, placement, offset]);
 
+  const isFromKeepOpenPortal = (target: EventTarget | null) =>
+    !!(
+      target instanceof Element &&
+      target.closest('[data-twine-keepopen="true"]')
+    );
+
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    if (trigger !== 'click' || !isOpen) return;
+
+    const handlePointerDownCapture = (event: PointerEvent) => {
+      const t = event.target as Node | null;
+
+      // If the click happens inside the trigger, the popover, or a "keepopen" portal, ignore
       if (
-        isOpen &&
-        triggerRef.current &&
-        contentRef.current &&
-        !triggerRef.current.contains(event.target as Node) &&
-        !contentRef.current.contains(event.target as Node)
+        (triggerRef.current && triggerRef.current.contains(t)) ||
+        (contentRef.current && contentRef.current.contains(t)) ||
+        isFromKeepOpenPortal(event.target)
       ) {
-        setOpen(false);
+        return;
       }
+      setOpen(false);
     };
 
-    if (trigger === 'click') {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () =>
-        document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isOpen, trigger]);
+    const handleClickCapture = (event: MouseEvent) => {
+      const t = event.target as Node | null;
+      if (
+        (triggerRef.current && triggerRef.current.contains(t)) ||
+        (contentRef.current && contentRef.current.contains(t)) ||
+        isFromKeepOpenPortal(event.target)
+      ) {
+        return;
+      }
+      setOpen(false);
+    };
+
+    // Use CAPTURE so we run early and make a keep-open decision for portals
+    document.addEventListener('pointerdown', handlePointerDownCapture, true);
+    document.addEventListener('click', handleClickCapture, true);
+    return () => {
+      document.removeEventListener(
+        'pointerdown',
+        handlePointerDownCapture,
+        true
+      );
+      document.removeEventListener('click', handleClickCapture, true);
+    };
+  }, [trigger, isOpen]);
 
   const handleTriggerClick = () => {
-    if (trigger === 'click') {
-      setOpen(!isOpen);
-    }
-  };
-
-  const handleTriggerMouseEnter = () => {
-    if (trigger === 'hover') {
-      setOpen(true);
-    }
-  };
-
-  const handleTriggerMouseLeave = () => {
-    if (trigger === 'hover') {
-      setOpen(false);
-    }
+    if (trigger === 'click') setOpen(!isOpen);
   };
 
   return (
@@ -141,8 +160,8 @@ const Popover: React.FC<PopoverProps> = ({
         ref={triggerRef}
         className={`inline-block ${className}`}
         onClick={handleTriggerClick}
-        onMouseEnter={handleTriggerMouseEnter}
-        onMouseLeave={handleTriggerMouseLeave}
+        onMouseEnter={() => trigger === 'hover' && setOpen(true)}
+        onMouseLeave={() => trigger === 'hover' && setOpen(false)}
       >
         {children}
       </div>
@@ -151,10 +170,7 @@ const Popover: React.FC<PopoverProps> = ({
         <div
           ref={contentRef}
           className={`fixed z-50 bg-white border border-gray-200 rounded-md shadow-lg ${contentClassName}`}
-          style={{
-            top: `${position.top}px`,
-            left: `${position.left}px`,
-          }}
+          style={{ top: position.top, left: position.left }}
           onMouseEnter={() => trigger === 'hover' && setOpen(true)}
           onMouseLeave={() => trigger === 'hover' && setOpen(false)}
         >

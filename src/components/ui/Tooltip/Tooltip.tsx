@@ -253,5 +253,7 @@ const Tooltip = ({
   );
 };
 
+Tooltip.displayName = 'Tooltip';
+
 export { Tooltip };
 export default Tooltip;

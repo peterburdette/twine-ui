@@ -44,7 +44,6 @@ export interface SelectProps
 }
 
 const ROW_H = { sm: 32, md: 36, lg: 44 } as const;
-
 const CARET_W = 16;
 const CARET_GAP = 8;
 const CARET_SAFETY = 4;
@@ -84,7 +83,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       width: 0,
     });
 
-    // A11y: active option index while popup is open
+    // A11y & typeahead
     const [activeIndex, setActiveIndex] = useState<number | null>(null);
     const typeaheadRef = useRef({ buffer: '', lastTime: 0 });
 
@@ -108,7 +107,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
     const describedBy =
       [helperId, errorId].filter(Boolean).join(' ') || undefined;
 
-    /** ---------- Positioning & Width (longest option) ---------- */
+    /* --------------------------- positioning / sizing -------------------------- */
 
     const measureLongestOptionWidth = (): number => {
       if (typeof document === 'undefined') return 0;
@@ -146,7 +145,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       });
       document.body.removeChild(measurer);
 
-      return Math.ceil(max + 4); // border + tiny buffer
+      return Math.ceil(max + 4);
     };
 
     const computeAndSetPopupGeometry = () => {
@@ -164,7 +163,6 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       const spaceAbove = rect.top;
       const openUpward = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
 
-      // Desired width = longest option (nowrap) but at least trigger width
       const longest = measureLongestOptionWidth();
       const desiredWidth = Math.max(rect.width, longest);
 
@@ -176,7 +174,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       if (left + width > viewportW - margin) {
         left = Math.max(margin, viewportW - margin - width);
         if (width > viewportW - margin * 2) {
-          width = viewportW - margin * 2; // clip; no horizontal scrollbar
+          width = viewportW - margin * 2;
         }
       }
 
@@ -192,7 +190,8 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, options, size]);
 
-    // Close behavior: outside click / page scroll / resize
+    /* --------------------------- open/close behaviors -------------------------- */
+
     const eventFromInside = (e: Event) => {
       const path = (e as any).composedPath?.() as EventTarget[] | undefined;
       const inPopupOrTrigger = (node: EventTarget) =>
@@ -205,7 +204,6 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
 
       if (path && path.length) return path.some(inPopupOrTrigger);
 
-      // Fallback if composedPath is not available
       const target = e.target as Node | null;
       if (!target) return false;
       return (
@@ -214,7 +212,6 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       );
     };
 
-    // Close behavior: outside click / page scroll / resize
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
         if (eventFromInside(event)) return;
@@ -248,7 +245,6 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       };
     }, [isOpen]);
 
-    // When opening, set the active index to the selected or first enabled
     useEffect(() => {
       if (isOpen) {
         const initial =
@@ -258,13 +254,11 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
         setActiveIndex(initial >= 0 ? initial : null);
         requestAnimationFrame(computeAndSetPopupGeometry);
       } else {
-        // reset typeahead when closed
         typeaheadRef.current.buffer = '';
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, selectedIndex, options]);
 
-    // Ensure active option is visible when it changes
     useEffect(() => {
       if (!isOpen || activeIndex == null || !listboxRef.current) return;
       const activeEl = document.getElementById(
@@ -273,7 +267,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
     }, [activeIndex, isOpen, selectId]);
 
-    /** ---------- Styling ---------- */
+    /* --------------------------------- styles -------------------------------- */
 
     const wrapperClasses = cn(
       'min-w-0',
@@ -318,7 +312,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       className
     );
 
-    /** ---------- Selection & Keyboard ---------- */
+    /* ---------------------------- selection / keys ---------------------------- */
 
     const optionId = (index: number) => `${selectId}-opt-${index}`;
 
@@ -380,7 +374,6 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
 
       const key = event.key;
 
-      // Typeahead: a-z/0-9 and space (when open)
       if (
         key.length === 1 &&
         !event.ctrlKey &&
@@ -454,7 +447,6 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
           break;
         }
         case 'Tab': {
-          // Let Tab move focus naturally; just close the popup
           setIsOpen(false);
           setActiveIndex(null);
           break;
@@ -462,23 +454,28 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       }
     };
 
-    /** ---------- Portal Popup ---------- */
+    /* ------------------------------ portal popup ------------------------------ */
 
     const DropdownPortal = () => {
       if (!isOpen || typeof window === 'undefined') return null;
 
       return createPortal(
         <>
+          {/* overlay to close dropdown; make sure events don't bubble to document */}
           <div
             className="fixed inset-0 z-40"
-            onClick={() => {
+            onPointerDown={(e) => {
+              e.stopPropagation();
               setIsOpen(false);
               setActiveIndex(null);
             }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           />
           <div
             ref={listboxRef}
             id={listboxId}
+            data-twine-keepopen="true"
             className="fixed z-50 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto overflow-x-hidden whitespace-nowrap"
             style={{
               top: dropdownPosition.top,
@@ -487,9 +484,11 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
             }}
             role="listbox"
             aria-labelledby={labelId}
-            // Prevent wheel/scroll bubbling up to the window listener
             onWheelCapture={(e) => e.stopPropagation()}
             onTouchMoveCapture={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             {options.length === 0 ? (
               <div className="px-3 py-2 text-sm text-gray-500">
@@ -513,6 +512,8 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
                       isSelected && 'bg-blue-50 text-blue-600',
                       isActive && 'bg-gray-100'
                     )}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
                     onClick={() =>
                       !option.disabled && handleOptionSelect(option.value)
                     }
@@ -539,9 +540,8 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
       );
     };
 
-    /** ---------- Render ---------- */
+    /* -------------------------------- render --------------------------------- */
 
-    // Inline style ensures caret gutter always wins over Tailwind px classes
     const triggerStyle: React.CSSProperties = {
       ...(fixedTriggerWidth
         ? { width: fixedTriggerWidth, minWidth: fixedTriggerWidth }
