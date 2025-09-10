@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import { DateAdapter } from '../../../components/ui/DatePickers/types';
+import { DateAdapter } from '../types';
 
 export const luxonAdapter: DateAdapter = {
   now: () => new Date(),

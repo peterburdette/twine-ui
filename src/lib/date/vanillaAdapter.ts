@@ -1,4 +1,4 @@
-import { DateAdapter } from '../../components/ui/DatePickers/types';
+import { DateAdapter } from './types';
 
 export const vanillaAdapter: DateAdapter = {
   now: () => new Date(),

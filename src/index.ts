@@ -19,8 +19,8 @@ export { Button } from './components/ui/Button';
 export { DataGrid } from './components/DataGrid';
 export { FormControl } from './components/ui/FormControl';
 export { FormControlLabel } from './components/ui/FormControlLabel';
-
-// Card
+export { DatePicker } from './components/ui/DatePicker/DatePicker';
+export { DateTimePicker } from './components/ui/DateTimePicker/DateTimePicker';
 export {
   Card,
   CardHeader,
@@ -33,28 +33,6 @@ export {
   CardDivider,
   CardSection,
 } from './components/ui/Card';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DateTimePicker (component, types, constants)
-// ─────────────────────────────────────────────────────────────────────────────
-export { DateTimePicker } from './components/ui/DatePickers/DateTimePicker';
-export type { DateTimePickerProps } from './components/ui/DatePickers/DateTimePicker';
-export type {
-  DateTimeRange,
-  DateAdapter,
-} from './components/ui/DatePickers/types';
-export {
-  DEFAULT_MONTHS,
-  DEFAULT_DAYS,
-  ROWS_X_COLS,
-} from './components/ui/DatePickers/constants';
-
-// Date adapters (zero-deps default + optional adapters)
-export { vanillaAdapter } from './lib/date/vanillaAdapter';
-export { dateFnsAdapter } from './lib/date/adapters/dateFnsAdapter';
-export { dayjsAdapter } from './lib/date/adapters/dayjsAdapter';
-export { momentAdapter } from './lib/date/adapters/momentAdapter';
-export { luxonAdapter } from './lib/date/adapters/luxonAdapter';
 
 // Export types
 export type {
@@ -83,8 +61,9 @@ export type {
 } from './types';
 export type { FormControlProps } from './components/ui/FormControl';
 export type { FormControlLabelProps } from './components/ui/FormControlLabel';
-
-// Card types
+export type { DatePickerProps } from './components/ui/DatePicker/DatePicker';
+export type { DateTimePickerProps } from './components/ui/DateTimePicker/DateTimePicker';
+export type { DateTimeRange, DateAdapter } from './lib/date/types';
 export type {
   CardProps,
   CardHeaderProps,
@@ -119,3 +98,16 @@ export type {
 export * from './utils/gridFormatters';
 export * from './utils/gridValueGetters';
 export { GridExportUtils } from './utils/gridExport';
+
+export {
+  DEFAULT_MONTHS,
+  DEFAULT_DAYS,
+  ROWS_X_COLS,
+} from './components/ui/DateTimePicker/constants';
+
+// Date adapters (zero-deps default + optional adapters)
+export { vanillaAdapter } from './lib/date/vanillaAdapter';
+export { dateFnsAdapter } from './lib/date/adapters/dateFnsAdapter';
+export { dayjsAdapter } from './lib/date/adapters/dayjsAdapter';
+export { momentAdapter } from './lib/date/adapters/momentAdapter';
+export { luxonAdapter } from './lib/date/adapters/luxonAdapter';

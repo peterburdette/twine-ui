@@ -2,45 +2,37 @@
 
 import * as React from 'react';
 import {
-  Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
-  Clock,
+  Calendar as CalendarIcon,
 } from 'lucide-react';
-import { cn } from '../../../lib/utils';
 
+import { cn } from '../../../lib/utils';
 import Button from '../Button';
 import Input from '../Input/Input';
-import Select from '../Select/Select';
 import Popover from '../Popover/Popover';
 
 import { DEFAULT_MONTHS, DEFAULT_DAYS, ROWS_X_COLS } from './constants';
-import type { DateAdapter, DateTimeRange } from './types';
-
-// zero-dependency adapter by default
+import { DateAdapter } from '../../../lib/date/types';
 import { vanillaAdapter } from '../../../lib/date';
 
-export interface DateTimePickerProps {
+export interface DatePickerProps {
   value?: Date;
   onChange?: (date: Date | undefined) => void;
 
-  rangeValue?: DateTimeRange;
-  onRangeChange?: (range: DateTimeRange) => void;
-  isRange?: boolean;
-
   placeholder?: string;
-  rangePlaceholder?: { start?: string; end?: string };
   disabled?: boolean;
   minDate?: Date;
   maxDate?: Date;
   disabledDates?: Date[];
-  showTime?: boolean;
-  timeFormat?: '12' | '24';
   dateFormat?: string;
+
   label?: string;
   error?: string;
   required?: boolean;
   className?: string;
+
+  /** Visual size for the input; mapped to nearest size for inner controls */
   inputSize?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   variant?:
     | 'default'
@@ -59,7 +51,7 @@ export interface DateTimePickerProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 
-  enableQuickActions?: boolean; // Today/Clear/Done
+  enableQuickActions?: boolean; // Today / Clear
   readOnly?: boolean;
   ariaLabel?: string;
 
@@ -69,66 +61,59 @@ export interface DateTimePickerProps {
 
 const STABLE_EPOCH = new Date(Date.UTC(2000, 0, 1, 0, 0, 0)); // SSR-safe sentinel
 
-/** Map extended input sizes → nearest supported control size ('sm' | 'md' | 'lg'). */
-const mapToControlSize = (s: NonNullable<DateTimePickerProps['inputSize']>) =>
-  s === 'xs' ? 'sm' : s === 'xl' ? 'lg' : s;
-
-/** If your Input supports only 'sm'|'md'|'lg', we map the same way. */
-const mapToInputSize = mapToControlSize;
-
-/** Map DateTimePicker variant → Select's supported variants */
-type SelectVariant = 'default' | 'filled' | 'outlined' | 'ghost' | 'underline';
-const mapToSelectVariant = (
-  v: NonNullable<DateTimePickerProps['variant']>
-): SelectVariant =>
-  v === 'floating'
-    ? 'outlined'
-    : v === 'inset'
-    ? 'filled'
-    : (v as SelectVariant);
-
-const getInitialTimeFromDate = (d: Date | undefined, tf: '12' | '24') => {
-  const hours = d ? d.getHours() : 12;
-  return {
-    hours: tf === '12' ? hours % 12 || 12 : hours,
-    minutes: d ? d.getMinutes() : 0,
-    period: d && d.getHours() >= 12 ? ('PM' as const) : ('AM' as const),
-  };
+// Force month/year without time regardless of adapter behavior
+const formatMonthYear = (d: Date) => {
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'long',
+      year: 'numeric',
+    }).format(d);
+  } catch {
+    // Safe fallback
+    const month = d.toLocaleString('en-US', { month: 'long' });
+    return `${month} ${d.getFullYear()}`;
+  }
 };
 
-const DateTimePicker = ({
+const formatYearOnly = (d: Date) => String(d.getFullYear());
+
+/** Map extended input sizes → nearest supported input size ('sm'|'md'|'lg') */
+const mapToInputSize = (s: NonNullable<DatePickerProps['inputSize']>) =>
+  s === 'xs' ? 'sm' : s === 'xl' ? 'lg' : s;
+
+const DatePicker: React.FC<DatePickerProps> = ({
   value,
   onChange,
-  rangeValue,
-  onRangeChange,
-  isRange = false,
-  placeholder = 'Select date and time',
-  rangePlaceholder,
+
+  placeholder = 'Select date',
   disabled = false,
   minDate,
   maxDate,
   disabledDates = [],
-  showTime = true,
-  timeFormat = '12',
-  dateFormat = showTime ? 'MMM dd, yyyy HH:mm' : 'MMM dd, yyyy',
+  dateFormat = 'MMM dd, yyyy',
+
   label,
   error,
   required = false,
   className,
+
   inputSize = 'md',
   variant = 'default',
+
   dateAdapter = vanillaAdapter,
   weekStartsOn = 0,
   localeMonthNames = DEFAULT_MONTHS,
   localeWeekdayShort = DEFAULT_DAYS as unknown as string[],
+
   open: controlledOpen,
   onOpenChange,
+
   enableQuickActions = true,
   readOnly = false,
   ariaLabel,
   deferInitialRender = true,
-}: DateTimePickerProps) => {
-  // mount flag (avoid SSR date formatting mismatch)
+}) => {
+  // --- SSR hydration guard (avoid formatting "now" on the server) ---
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
 
@@ -137,13 +122,13 @@ const DateTimePicker = ({
   const descrId = React.useId();
   const gridId = React.useId();
 
-  // open state
+  // popover state (controlled/uncontrolled)
   const [internalOpen, setInternalOpen] = React.useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = (o: boolean) =>
     onOpenChange ? onOpenChange(o) : setInternalOpen(o);
 
-  // initial base for view
+  // view date (month being displayed)
   const initialViewBase =
     value && dateAdapter.isValid(value)
       ? value
@@ -153,7 +138,7 @@ const DateTimePicker = ({
 
   const [viewDate, setViewDate] = React.useState<Date>(() => initialViewBase);
 
-  // align viewDate to now after mount if deferred and no value provided
+  // align to now after mount, if deferring
   React.useEffect(() => {
     if (!mounted) return;
     if (!value && deferInitialRender) {
@@ -162,32 +147,29 @@ const DateTimePicker = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted]);
 
-  const [timeValue, setTimeValue] = React.useState(() =>
-    getInitialTimeFromDate(
-      value && dateAdapter.isValid(value)
-        ? value
-        : deferInitialRender
-        ? undefined
-        : dateAdapter.now(),
-      timeFormat
-    )
-  );
-
-  // sync time when controlled value changes
-  React.useEffect(() => {
-    if (value && dateAdapter.isValid(value)) {
-      setTimeValue(getInitialTimeFromDate(value, timeFormat));
-      setViewDate(value);
+  // ---- DATE-ONLY formatter (never show time in input) ----
+  const formatDateOnly = (d?: Date) => {
+    if (!d || !dateAdapter.isValid(d)) return '';
+    const out = dateAdapter.format(d, dateFormat);
+    // If adapter output accidentally includes time, fallback to a safe date-only format
+    if (/[0-9]:[0-9]|AM|PM|GMT|T\d{2}:/.test(out)) {
+      try {
+        return new Intl.DateTimeFormat(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: '2-digit',
+        }).format(d);
+      } catch {
+        return d.toDateString();
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, timeFormat]);
+    return out;
+  };
 
-  // formatted input value
+  // formatted input value (SSR-safe)
   const [inputValue, setInputValue] = React.useState<string>(() => {
     if (!deferInitialRender) {
-      return value && dateAdapter.isValid(value)
-        ? dateAdapter.format(value, dateFormat)
-        : '';
+      return formatDateOnly(value);
     }
     return '';
   });
@@ -195,35 +177,36 @@ const DateTimePicker = ({
   React.useEffect(() => {
     if (!mounted && deferInitialRender) return;
     if (value && dateAdapter.isValid(value)) {
-      setInputValue(dateAdapter.format(value, dateFormat));
+      setInputValue(formatDateOnly(value)); // ensure date-only text
+      setViewDate(value);
     } else {
       setInputValue('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, value, dateFormat]);
 
-  // view mode
+  // view mode: day/month/year
   const [view, setView] = React.useState<'day' | 'month' | 'year'>('day');
 
-  // temp range cache
-  const [tempRange, setTempRange] = React.useState<DateTimeRange>({
-    start: undefined,
-    end: undefined,
-  });
+  // keyboard focus day
+  const [activeDay, setActiveDay] = React.useState<Date>(() =>
+    value && dateAdapter.isValid(value) ? value : initialViewBase
+  );
 
-  // parsing free-typed input
+  // ---- parsing free-typed input ----
   const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
     try {
       const parsed = dateAdapter.parse(newValue, dateFormat, dateAdapter.now());
-      if (dateAdapter.isValid(parsed)) onChange?.(parsed);
+      if (dateAdapter.isValid(parsed))
+        onChange?.(dateAdapter.startOfDay(parsed)); // normalize to date-only
     } catch {
       /* ignore */
     }
   };
 
-  // predicates
+  // ---- predicates ----
   const isDateDisabled = (date: Date) => {
     if (minDate && dateAdapter.isBefore(date, dateAdapter.startOfDay(minDate)))
       return true;
@@ -231,61 +214,16 @@ const DateTimePicker = ({
       return true;
     return disabledDates.some((d) => dateAdapter.isSameDay(date, d));
   };
-  const isInTempRange = (date: Date) =>
-    isRange &&
-    tempRange.start &&
-    tempRange.end &&
-    dateAdapter.isAfter(date, tempRange.start) &&
-    dateAdapter.isBefore(date, tempRange.end);
-  const isStart = (date: Date) =>
-    isRange &&
-    !!tempRange.start &&
-    dateAdapter.isSameDay(date, tempRange.start);
-  const isEnd = (date: Date) =>
-    isRange && !!tempRange.end && dateAdapter.isSameDay(date, tempRange.end);
   const isToday = (date: Date) =>
     dateAdapter.isSameDay(date, dateAdapter.now());
 
-  // commit single date
-  const commitSingleDate = (date: Date) => {
-    if (showTime) {
-      const is12 = timeFormat === '12';
-      const baseHours = Number(timeValue.hours) % (is12 ? 12 : 24);
-      const hours = is12
-        ? baseHours + (timeValue.period === 'PM' ? 12 : 0)
-        : baseHours;
-      const next = dateAdapter.setHoursMinutes(
-        date,
-        hours,
-        Number(timeValue.minutes)
-      );
-      onChange?.(next);
-    } else {
-      onChange?.(date);
-      setOpen(false);
-    }
-  };
-
+  // ---- select a day ----
   const handleDateSelect = (date: Date) => {
-    if (isRange) {
-      if (!tempRange.start) {
-        setTempRange({ start: date, end: undefined });
-      } else if (!tempRange.end && dateAdapter.isAfter(date, tempRange.start)) {
-        setTempRange({ ...tempRange, end: date });
-        onRangeChange?.({ start: tempRange.start, end: date });
-        setOpen(false);
-      } else {
-        setTempRange({ start: date, end: undefined });
-      }
-      return;
-    }
-    commitSingleDate(date);
+    onChange?.(dateAdapter.startOfDay(date)); // ensure date-only
+    setOpen(false);
   };
 
-  // keyboard nav
-  const [activeDay, setActiveDay] = React.useState<Date>(() =>
-    value && dateAdapter.isValid(value) ? value : initialViewBase
-  );
+  // ---- keyboard navigation within day view ----
   const moveActive = (days: number) => {
     const d = new Date(activeDay);
     d.setDate(d.getDate() + days);
@@ -350,7 +288,7 @@ const DateTimePicker = ({
     }
   };
 
-  // header nav
+  // ---- header nav ----
   const goPrev = () => {
     if (view === 'day') setViewDate(dateAdapter.addMonths(viewDate, -1));
     else if (view === 'month') setViewDate(dateAdapter.addYears(viewDate, -1));
@@ -362,7 +300,7 @@ const DateTimePicker = ({
     else setViewDate(dateAdapter.addYears(viewDate, 10));
   };
 
-  // calendar
+  // ---- calendar body ----
   const renderCalendar = () => {
     const year = dateAdapter.getYear(viewDate);
     const month = dateAdapter.getMonth(viewDate);
@@ -434,13 +372,9 @@ const DateTimePicker = ({
         value &&
         dateAdapter.isValid(value) &&
         dateAdapter.isSameDay(date, value);
-      const inRange = isInTempRange(date);
-      const start = isStart(date);
-      const end = isEnd(date);
       const disabledDay = isDateDisabled(date);
 
-      const lockHover = disabledDay || selected || inRange || start || end; // no hover if disabled/selected/range edges
-
+      const lockHover = disabledDay || selected;
       const label = mounted ? dateAdapter.format(date, 'PPPP') : '';
 
       cells.push(
@@ -463,8 +397,6 @@ const DateTimePicker = ({
             !inThisMonth && 'text-gray-400',
             disabledDay && 'cursor-default opacity-50',
             selected && 'bg-blue-600 text-white',
-            (start || end) && 'bg-blue-600 text-white',
-            inRange && 'bg-gray-900 text-white/90',
             !lockHover && 'hover:bg-gray-100'
           )}
         >
@@ -479,7 +411,6 @@ const DateTimePicker = ({
       );
     }
 
-    // weekday header respecting weekStartsOn
     const weekdayOrder = Array.from(
       { length: 7 },
       (_, i) => (i + weekStartsOn) % 7
@@ -516,103 +447,7 @@ const DateTimePicker = ({
     );
   };
 
-  // time picker
-  const renderTime = () => {
-    if (!showTime) return null;
-
-    const hours =
-      timeFormat === '12'
-        ? Array.from({ length: 12 }, (_, i) => i + 1)
-        : Array.from({ length: 24 }, (_, i) => i);
-    const minutes = Array.from({ length: 60 }, (_, i) => i);
-
-    const onTimeChange = (type: 'hours' | 'minutes' | 'period', v: string) => {
-      const next = {
-        ...timeValue,
-        [type]: type === 'period' ? v : Number.parseInt(v),
-      };
-      setTimeValue(next);
-
-      const base = value && dateAdapter.isValid(value) ? value : viewDate;
-      const is12 = timeFormat === '12';
-      const baseHours = Number(next.hours) % (is12 ? 12 : 24);
-      const hours24 = is12
-        ? baseHours + (next.period === 'PM' ? 12 : 0)
-        : baseHours;
-
-      const updated = dateAdapter.setHoursMinutes(
-        base,
-        hours24,
-        Number(next.minutes)
-      );
-      onChange?.(updated);
-    };
-
-    // Use the shared inputSize/variant for the time controls as well (mapped)
-    const controlSize = mapToControlSize(inputSize);
-    const controlVariant = mapToSelectVariant(variant);
-
-    return (
-      <>
-        <div className="border-t" />
-        <div
-          className="p-3 space-y-3"
-          aria-label="Time selector"
-        >
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Clock
-              className="h-4 w-4"
-              aria-hidden="true"
-            />
-            Time
-          </div>
-          <div className="flex items-center gap-2">
-            <Select
-              options={hours.map((h) => ({
-                value: String(h),
-                label: String(h).padStart(2, '0'),
-              }))}
-              value={String(timeValue.hours)}
-              onChange={(v) => onTimeChange('hours', v)}
-              size={controlSize}
-              variant={controlVariant}
-              fixedTriggerWidth={64}
-              aria-label="Hours"
-            />
-            <span aria-hidden>:</span>
-            <Select
-              options={minutes.map((m) => ({
-                value: String(m),
-                label: String(m).padStart(2, '0'),
-              }))}
-              value={String(timeValue.minutes)}
-              onChange={(v) => onTimeChange('minutes', v)}
-              size={controlSize}
-              variant={controlVariant}
-              fixedTriggerWidth={64}
-              aria-label="Minutes"
-            />
-            {timeFormat === '12' && (
-              <Select
-                options={[
-                  { value: 'AM', label: 'AM' },
-                  { value: 'PM', label: 'PM' },
-                ]}
-                value={timeValue.period}
-                onChange={(v) => onTimeChange('period', v)}
-                size={controlSize}
-                variant={controlVariant}
-                fixedTriggerWidth={72}
-                aria-label="AM or PM"
-              />
-            )}
-          </div>
-        </div>
-      </>
-    );
-  };
-
-  // quick actions
+  // ---- quick actions ----
   const renderQuick = () => {
     if (!enableQuickActions) return null;
     return (
@@ -623,7 +458,7 @@ const DateTimePicker = ({
           onClick={() => {
             const today = dateAdapter.now();
             setViewDate(today);
-            if (!isRange) commitSingleDate(today);
+            onChange?.(dateAdapter.startOfDay(today)); // date-only
           }}
         >
           Today
@@ -633,31 +468,18 @@ const DateTimePicker = ({
             size="sm"
             variant="ghost"
             onClick={() => {
-              if (isRange) {
-                setTempRange({ start: undefined, end: undefined });
-                onRangeChange?.({ start: undefined, end: undefined });
-              } else {
-                onChange?.(undefined);
-              }
+              onChange?.(undefined);
               setInputValue('');
             }}
           >
             Clear
           </Button>
-          {showTime && (
-            <Button
-              size="sm"
-              onClick={() => setOpen(false)}
-            >
-              Done
-            </Button>
-          )}
         </div>
       </div>
     );
   };
 
-  // header
+  // ---- header ----
   const Header = (
     <div className="flex items-center justify-between p-2 border-b">
       <Button
@@ -682,8 +504,8 @@ const DateTimePicker = ({
         aria-live="polite"
         suppressHydrationWarning
       >
-        {mounted && view === 'day' && dateAdapter.format(viewDate, 'MMMM yyyy')}
-        {mounted && view === 'month' && dateAdapter.getYear(viewDate)}
+        {mounted && view === 'day' && formatMonthYear(viewDate)}
+        {mounted && view === 'month' && formatYearOnly(viewDate)}
         {mounted &&
           view === 'year' &&
           `${Math.floor(dateAdapter.getYear(viewDate) / 10) * 10}-${
@@ -691,6 +513,7 @@ const DateTimePicker = ({
           }`}
         {!mounted && '\u00A0'}
       </Button>
+
       <Button
         variant="ghost"
         size="sm"
@@ -705,7 +528,7 @@ const DateTimePicker = ({
     </div>
   );
 
-  // popover content
+  // ---- popover content ----
   const content = (
     <div
       role="dialog"
@@ -715,32 +538,24 @@ const DateTimePicker = ({
     >
       {Header}
       {renderCalendar()}
-      {renderTime()}
       {renderQuick()}
     </div>
   );
 
-  // map extended input sizes for the text field
+  // map extended sizes to your Input's supported sizes
   const inputVisualSize = mapToInputSize(inputSize);
 
-  // When using floating/inset in your Input, avoid duplicating the visible label
+  // internal vs external label (for floating/inset)
   const usingInternalLabel = variant === 'floating' || variant === 'inset';
   const externalLabel = label && !usingInternalLabel ? label : undefined;
+  const inputInternalLabel = usingInternalLabel ? label : undefined;
 
-  // For floating/inset variants, the label lives inside the input.
-  // Use the provided `label` if present; otherwise fall back to the placeholder or a sensible default.
-  const inputInternalLabel = usingInternalLabel
-    ? label ?? placeholder ?? 'Select date and time'
-    : undefined;
-
-  /**
-   * IMPORTANT:
-   * Floating/Insett label CSS relies on :placeholder-shown.
-   * That selector only works if there **is** a placeholder.
-   * Use a single space so we don't render visible placeholder text,
-   * but still trigger the CSS.
-   */
-  const inputPlaceholder = usingInternalLabel ? ' ' : placeholder ?? '';
+  // inject a single-space placeholder for floating/inset so :placeholder-shown works
+  const shouldInjectSpacePlaceholder =
+    usingInternalLabel &&
+    !inputValue &&
+    (!placeholder || placeholder.length === 0);
+  const effectivePlaceholder = shouldInjectSpacePlaceholder ? ' ' : placeholder;
 
   return (
     <div className={cn('space-y-2', className)}>
@@ -775,14 +590,14 @@ const DateTimePicker = ({
             id={inputId}
             value={inputValue}
             onChange={onInputChange}
-            placeholder={inputPlaceholder}
+            placeholder={effectivePlaceholder}
             disabled={disabled}
             readOnly={readOnly}
             aria-invalid={!!error || undefined}
             aria-required={required || undefined}
             aria-label={
               !externalLabel && !inputInternalLabel
-                ? ariaLabel ?? 'Date time input'
+                ? ariaLabel ?? 'Date input'
                 : undefined
             }
             aria-describedby={error ? descrId : undefined}
@@ -809,7 +624,6 @@ const DateTimePicker = ({
   );
 };
 
-DateTimePicker.displayName = 'DateTimePicker';
-
-export { DateTimePicker };
-export default DateTimePicker;
+DatePicker.displayName = 'DatePicker';
+export { DatePicker };
+export default DatePicker;

@@ -11,7 +11,7 @@ import {
   startOfWeek as fnsStartOfWeek,
   differenceInCalendarDays as fnsDiffDays,
 } from 'date-fns';
-import { DateAdapter } from '../../../components/ui/DatePickers/types';
+import { DateAdapter } from '../types';
 
 /**
  * Coerce our public `number` (0..6) into date-fns' branded `Day` type.
