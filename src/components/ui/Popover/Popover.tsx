@@ -39,20 +39,64 @@ const Popover: React.FC<PopoverProps> = ({
     onOpenChange?.(open);
   };
 
+  // true if event target is inside trigger/popover or a keep-open portal
+  const eventFromInside = (e: Event) => {
+    const path = (e as any).composedPath?.() as EventTarget[] | undefined;
+    const inAreas = (node: EventTarget) =>
+      (contentRef.current &&
+        node instanceof Node &&
+        contentRef.current.contains(node)) ||
+      (triggerRef.current &&
+        node instanceof Node &&
+        triggerRef.current.contains(node)) ||
+      (node instanceof Element &&
+        !!node.closest('[data-twine-keepopen="true"]'));
+
+    if (path && path.length) return path.some(inAreas);
+
+    const t = e.target as Node | null;
+    return (
+      !!t &&
+      ((contentRef.current?.contains(t) ?? false) ||
+        (triggerRef.current?.contains(t) ?? false) ||
+        (t instanceof Element && !!t.closest('[data-twine-keepopen="true"]')))
+    );
+  };
+
   const calculatePosition = () => {
     if (!triggerRef.current || !contentRef.current) return;
 
     const triggerRect = triggerRef.current.getBoundingClientRect();
     const contentRect = contentRef.current.getBoundingClientRect();
-    const viewport = {
-      width: window.innerWidth,
-      height: window.innerHeight,
-    };
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const margin = 8;
+
+    const spaceBelow = viewportH - triggerRect.bottom;
+    const spaceAbove = triggerRect.top;
+
+    // flip for top/bottom when there's not enough room
+    const shouldFlip =
+      (placement === 'bottom' &&
+        spaceBelow < contentRect.height &&
+        spaceAbove > spaceBelow) ||
+      (placement === 'top' &&
+        spaceAbove < contentRect.height &&
+        spaceBelow > spaceAbove);
+
+    const actualPlacement =
+      placement === 'bottom' || placement === 'top'
+        ? shouldFlip
+          ? placement === 'bottom'
+            ? 'top'
+            : 'bottom'
+          : placement
+        : placement;
 
     let top = 0;
     let left = 0;
 
-    switch (placement) {
+    switch (actualPlacement) {
       case 'top':
         top = triggerRect.top - contentRect.height - offset;
         left = triggerRect.left + (triggerRect.width - contentRect.width) / 2;
@@ -71,81 +115,57 @@ const Popover: React.FC<PopoverProps> = ({
         break;
     }
 
-    // Clamp to viewport
-    if (left < 8) left = 8;
-    if (left + contentRect.width > viewport.width) {
-      left = viewport.width - contentRect.width - 8;
-    }
-    if (top < 8) top = 8;
-    if (top + contentRect.height > viewport.height) {
-      top = viewport.height - contentRect.height - 8;
-    }
+    // clamp into viewport
+    if (left < margin) left = margin;
+    if (left + contentRect.width > viewportW - margin)
+      left = viewportW - contentRect.width - margin;
+    if (top < margin) top = margin;
+    if (top + contentRect.height > viewportH - margin)
+      top = viewportH - contentRect.height - margin;
 
     setPosition({ top, left });
   };
 
+  // Reposition while open (resize + scroll)
   useEffect(() => {
     if (!isOpen) return;
     calculatePosition();
 
     const onResize = () => calculatePosition();
-    const onScroll = () => calculatePosition();
+    const onScroll = (e: Event) => {
+      calculatePosition();
+      // Always close on *outside* scroll; keep open if the scroll is inside
+      if (!eventFromInside(e)) setOpen(false);
+    };
 
     window.addEventListener('resize', onResize, { passive: true });
+    // capture phase to catch most ancestors (including document scrolling)
     window.addEventListener('scroll', onScroll, {
       passive: true,
       capture: true,
     });
+    document.addEventListener('scroll', onScroll, {
+      passive: true,
+      capture: true,
+    });
+
     return () => {
       window.removeEventListener('resize', onResize);
       window.removeEventListener('scroll', onScroll, true);
+      document.removeEventListener('scroll', onScroll, true);
     };
   }, [isOpen, placement, offset]);
 
-  const isFromKeepOpenPortal = (target: EventTarget | null) =>
-    !!(
-      target instanceof Element &&
-      target.closest('[data-twine-keepopen="true"]')
-    );
-
+  // Close on true outside *click*
   useEffect(() => {
     if (trigger !== 'click' || !isOpen) return;
 
-    const handlePointerDownCapture = (event: PointerEvent) => {
-      const t = event.target as Node | null;
-
-      // If the click happens inside the trigger, the popover, or a "keepopen" portal, ignore
-      if (
-        (triggerRef.current && triggerRef.current.contains(t)) ||
-        (contentRef.current && contentRef.current.contains(t)) ||
-        isFromKeepOpenPortal(event.target)
-      ) {
-        return;
-      }
-      setOpen(false);
-    };
-
     const handleClickCapture = (event: MouseEvent) => {
-      const t = event.target as Node | null;
-      if (
-        (triggerRef.current && triggerRef.current.contains(t)) ||
-        (contentRef.current && contentRef.current.contains(t)) ||
-        isFromKeepOpenPortal(event.target)
-      ) {
-        return;
-      }
-      setOpen(false);
+      if (!eventFromInside(event)) setOpen(false);
     };
 
-    // Use CAPTURE so we run early and make a keep-open decision for portals
-    document.addEventListener('pointerdown', handlePointerDownCapture, true);
     document.addEventListener('click', handleClickCapture, true);
     return () => {
-      document.removeEventListener(
-        'pointerdown',
-        handlePointerDownCapture,
-        true
-      );
       document.removeEventListener('click', handleClickCapture, true);
     };
   }, [trigger, isOpen]);
