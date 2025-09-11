@@ -21,6 +21,7 @@ export { FormControl } from './components/ui/FormControl';
 export { FormControlLabel } from './components/ui/FormControlLabel';
 export { DatePicker } from './components/ui/DatePicker/DatePicker';
 export { DateTimePicker } from './components/ui/DateTimePicker/DateTimePicker';
+export { TimePicker } from './components/ui/TimePicker/TimePicker';
 export {
   Card,
   CardHeader,
@@ -63,6 +64,7 @@ export type { FormControlProps } from './components/ui/FormControl';
 export type { FormControlLabelProps } from './components/ui/FormControlLabel';
 export type { DatePickerProps } from './components/ui/DatePicker/DatePicker';
 export type { DateTimePickerProps } from './components/ui/DateTimePicker/DateTimePicker';
+export type { TimePickerProps } from './components/ui/TimePicker/TimePicker';
 export type { DateTimeRange, DateAdapter } from './lib/date/types';
 export type {
   CardProps,
