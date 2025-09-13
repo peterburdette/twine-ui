@@ -8,6 +8,8 @@ import {
   useState,
   useLayoutEffect,
   useRef,
+  cloneElement,
+  isValidElement,
 } from 'react';
 import { useFormControl } from '../FormControl/FormControl';
 import { Select } from '../Select/Select';
@@ -248,6 +250,20 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       setHasValue(event.target.value.length > 0);
       onChange?.(event);
+    };
+
+    /** Inject numeric size into Lucide icons (preserves consumer props). */
+    const renderSizedIcon = (node: React.ReactNode) => {
+      if (!node) return null;
+      if (isValidElement(node)) {
+        const existing = (node.props as any)?.className ?? '';
+        return cloneElement(node as React.ReactElement<any>, {
+          size: ICON_PX[inputSize],
+          className: `block shrink-0 ${existing}`.trim(),
+          'aria-hidden': (node.props as any)?.['aria-hidden'] ?? true,
+        });
+      }
+      return node;
     };
 
     /** Wrapper (not the input) renders variant visuals + focus-within state */
@@ -591,8 +607,13 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 >
                   <div
                     className={`${sizeScale[inputSize].iconBox} text-gray-400`}
+                    // Ensure container matches the icon size even when Tailwind classes differ
+                    style={{
+                      width: ICON_PX[inputSize],
+                      height: ICON_PX[inputSize],
+                    }}
                   >
-                    {startIcon}
+                    {renderSizedIcon(startIcon)}
                   </div>
                 </div>
               )}
@@ -616,8 +637,12 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 >
                   <div
                     className={`${sizeScale[inputSize].iconBox} text-gray-400`}
+                    style={{
+                      width: ICON_PX[inputSize],
+                      height: ICON_PX[inputSize],
+                    }}
                   >
-                    {endIcon}
+                    {renderSizedIcon(endIcon)}
                   </div>
                 </div>
               )}
@@ -687,7 +712,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                   style={{ height: '100%' }}
                   disabled={disabled}
                 >
-                  {inlineButton.icon && inlineButton.icon}
+                  {inlineButton.icon && renderSizedIcon(inlineButton.icon)}
                   <span>{inlineButton.label}</span>
                 </Button>
               </div>
@@ -735,8 +760,12 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               >
                 <div
                   className={`${sizeScale[inputSize].iconBox} text-gray-400`}
+                  style={{
+                    width: ICON_PX[inputSize],
+                    height: ICON_PX[inputSize],
+                  }}
                 >
-                  {startIcon}
+                  {renderSizedIcon(startIcon)}
                 </div>
               </div>
             )}
@@ -757,8 +786,12 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               >
                 <div
                   className={`${sizeScale[inputSize].iconBox} text-gray-400`}
+                  style={{
+                    width: ICON_PX[inputSize],
+                    height: ICON_PX[inputSize],
+                  }}
                 >
-                  {endIcon}
+                  {renderSizedIcon(endIcon)}
                 </div>
               </div>
             )}
