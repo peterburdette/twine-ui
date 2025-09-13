@@ -17,14 +17,12 @@ import { vanillaAdapter } from '../../../lib/date';
 export interface TimePickerProps {
   value?: Date;
   onChange?: (date: Date | undefined) => void;
-
   placeholder?: string;
   disabled?: boolean;
   label?: string;
   error?: string;
   required?: boolean;
   className?: string;
-
   inputSize?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   variant?:
     | 'default'
@@ -34,18 +32,15 @@ export interface TimePickerProps {
     | 'underline'
     | 'floating'
     | 'inset';
-
   timeFormat?: '12' | '24';
   displayFormat?: string;
   minuteStep?: number; // default 1 (controls menu density only)
   showSeconds?: boolean; // default false
-
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   enableQuickActions?: boolean; // Now / Clear / Done
   readOnly?: boolean;
   ariaLabel?: string;
-
   dateAdapter?: DateAdapter;
   deferInitialRender?: boolean;
 }
@@ -91,7 +86,6 @@ const formatTimeOnly = (
   }
 };
 
-/** Parse loose text like "3:05 pm" or "14:07[:30]" */
 const parseTimeLoose = (
   text: string,
   base: Date,
@@ -99,7 +93,6 @@ const parseTimeLoose = (
   showSeconds: boolean
 ): Date | null => {
   const v = text.trim();
-
   if (tf === '12') {
     const re = /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])$/;
     const m = v.match(re);
@@ -111,12 +104,10 @@ const parseTimeLoose = (
     const period = periodRaw.toUpperCase() as 'AM' | 'PM';
     if (period === 'PM' && h < 12) h += 12;
     if (period === 'AM' && h === 12) h = 0;
-
     const d = new Date(base);
     d.setHours(h, mins, showSeconds ? secs : 0, 0);
     return d;
   }
-
   const re = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
   const m = v.match(re);
   if (!m) return null;
@@ -124,18 +115,16 @@ const parseTimeLoose = (
   const h = clamp(parseInt(hStr, 10), 0, 23);
   const mins = clamp(parseInt(minStr, 10), 0, 59);
   const secs = clamp(secStr ? parseInt(secStr, 10) : 0, 0, 59);
-
   const d = new Date(base);
   d.setHours(h, mins, showSeconds ? secs : 0, 0);
   return d;
 };
 
-/* Keep the select-controlled state as strings to exactly match option values */
 type TimeState = {
-  hours: string; // '1'..'12' (12h) or '0'..'23' (24h)
-  minutes: string; // '0'..'59' (may be injected even if not on step)
-  seconds?: string; // '0'..'59' (only if showSeconds)
-  period?: 'AM' | 'PM'; // only for 12h
+  hours: string;
+  minutes: string;
+  seconds?: string;
+  period?: 'AM' | 'PM';
 };
 
 const fromDateToState = (
@@ -177,7 +166,6 @@ const toDateFromState = (
     : clamp(rawH, 0, 23);
   const m = clamp(parseInt(state.minutes || '0', 10), 0, 59);
   const s = showSeconds ? clamp(parseInt(state.seconds || '0', 10), 0, 59) : 0;
-
   const d = new Date(current);
   d.setHours(h24, m, s, 0);
   return d;
@@ -188,28 +176,23 @@ const toDateFromState = (
 const TimePicker: React.FC<TimePickerProps> = ({
   value,
   onChange,
-
   placeholder = 'Select time',
   disabled = false,
   label,
   error,
   required = false,
   className,
-
   inputSize = 'md',
   variant = 'default',
-
   timeFormat = '12',
   displayFormat,
   minuteStep = 1,
   showSeconds = false,
-
   open: controlledOpen,
   onOpenChange,
   enableQuickActions = true,
   readOnly = false,
   ariaLabel,
-
   dateAdapter = vanillaAdapter,
   deferInitialRender = true,
 }) => {
@@ -233,15 +216,10 @@ const TimePicker: React.FC<TimePickerProps> = ({
 
   React.useEffect(() => {
     if (!mounted && deferInitialRender) return;
-    if (value) {
-      setInputValue(formatTimeOnly(value, timeFormat, showSeconds));
-    } else {
-      setInputValue('');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted, value, timeFormat, showSeconds]);
+    if (value) setInputValue(formatTimeOnly(value, timeFormat, showSeconds));
+    else setInputValue('');
+  }, [mounted, value, timeFormat, showSeconds, deferInitialRender]);
 
-  // Keep select state as strings that exactly match option values
   const [timeValue, setTimeValue] = React.useState<TimeState>(() =>
     fromDateToState(
       value && dateAdapter.isValid(value) ? value : undefined,
@@ -254,8 +232,7 @@ const TimePicker: React.FC<TimePickerProps> = ({
     if (value && dateAdapter.isValid(value)) {
       setTimeValue(fromDateToState(value, timeFormat, showSeconds));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, timeFormat, showSeconds]);
+  }, [value, timeFormat, showSeconds, dateAdapter]);
 
   const commit = (next: TimeState) => {
     const base =
@@ -264,7 +241,6 @@ const TimePicker: React.FC<TimePickerProps> = ({
         : deferInitialRender
         ? STABLE_EPOCH
         : dateAdapter.now();
-
     const updated = toDateFromState(next, base, timeFormat, showSeconds);
     onChange?.(updated);
     setInputValue(formatTimeOnly(updated, timeFormat, showSeconds));
@@ -306,11 +282,9 @@ const TimePicker: React.FC<TimePickerProps> = ({
 
   const hoursOptions =
     timeFormat === '12'
-      ? Array.from({ length: 12 }, (_, i) => String(i + 1)) // '1'..'12'
-      : Array.from({ length: 24 }, (_, i) => String(i)); // '0'..'23'
+      ? Array.from({ length: 12 }, (_, i) => String(i + 1))
+      : Array.from({ length: 24 }, (_, i) => String(i));
 
-  // Build stepped minutes list, but always inject the current selected minute
-  // so the Select never shows "Select an option" after "Now" or manual typing.
   const minutesValues = React.useMemo(() => {
     const step = Math.max(1, minuteStep);
     let vals = Array.from({ length: Math.ceil(60 / step) }, (_, i) =>
@@ -320,10 +294,8 @@ const TimePicker: React.FC<TimePickerProps> = ({
       vals = [...vals, timeValue.minutes].sort((a, b) => Number(a) - Number(b));
     }
     return vals;
-    // include minuteStep and timeValue.minutes so list updates when either changes
   }, [minuteStep, timeValue.minutes]);
 
-  // Always include all 60 seconds so any "Now" value exists in the dropdown.
   const secondsOptions = showSeconds
     ? Array.from({ length: 60 }, (_, i) => String(i))
     : [];
@@ -335,6 +307,15 @@ const TimePicker: React.FC<TimePickerProps> = ({
       ? 'filled'
       : variant;
 
+  /* ---------- icon sizing (Lucide numeric size; use mapped visual size) ---------- */
+  const iconPxFor = (s: 'sm' | 'md' | 'lg') =>
+    s === 'sm' ? 16 : s === 'md' ? 20 : 24;
+
+  // Use mapped sizes so the icon height matches the actual control/input height.
+  const controlIconPx = iconPxFor(controlSize); // icon in the popover header
+  const inputVisualSize = mapToInputSize(inputSize); // 'xs'|'xl' → 'sm'|'lg'
+  const inputIconPx = iconPxFor(inputVisualSize); // icon in the input adornment
+
   /* --------------------------------- content --------------------------------- */
   const TimeControls = (
     <div
@@ -342,9 +323,11 @@ const TimePicker: React.FC<TimePickerProps> = ({
       aria-label="Time selector"
     >
       <div className="flex items-center gap-2 text-sm font-medium">
+        {/* block avoids baseline misalignment; size tied to mapped control size */}
         <Clock
-          className="h-4 w-4"
+          size={controlIconPx}
           aria-hidden="true"
+          className="block shrink-0"
         />
         Time
       </div>
@@ -353,7 +336,7 @@ const TimePicker: React.FC<TimePickerProps> = ({
         <Select
           options={hoursOptions.map((h) => ({
             value: h,
-            label: timeFormat === '12' ? pad2(Number(h)) : pad2(Number(h)),
+            label: pad2(Number(h)),
           }))}
           value={timeValue.hours}
           onChange={(v) => {
@@ -437,12 +420,9 @@ const TimePicker: React.FC<TimePickerProps> = ({
         variant="secondary"
         onClick={() => {
           const now = dateAdapter.now();
-
-          // No rounding: use exact current H/M/S
           const h24 = now.getHours();
           const mm = now.getMinutes();
           const ss = showSeconds ? now.getSeconds() : 0;
-
           const adjusted = new Date(
             now.getFullYear(),
             now.getMonth(),
@@ -453,7 +433,6 @@ const TimePicker: React.FC<TimePickerProps> = ({
             0
           );
 
-          // Update internal select values FIRST (as strings matching options)
           const next: TimeState =
             timeFormat === '12'
               ? {
@@ -470,8 +449,6 @@ const TimePicker: React.FC<TimePickerProps> = ({
 
           setTimeValue(next);
           setInputValue(formatTimeOnly(adjusted, timeFormat, showSeconds));
-
-          // Notify parent
           onChange?.(adjusted);
         }}
       >
@@ -511,7 +488,6 @@ const TimePicker: React.FC<TimePickerProps> = ({
   );
 
   /* -------------------------- placeholder/label wiring ------------------------ */
-  const inputVisualSize = mapToInputSize(inputSize);
   const usingInternalLabel = variant === 'floating' || variant === 'inset';
   const externalLabel = label && !usingInternalLabel ? label : undefined;
   const inputInternalLabel = usingInternalLabel ? label : undefined;
@@ -559,7 +535,14 @@ const TimePicker: React.FC<TimePickerProps> = ({
                 : undefined
             }
             aria-describedby={error ? descrId : undefined}
-            endIcon={<Clock className="h-5 w-5" />}
+            endIcon={
+              // Use mapped visual size for icon + block to center vertically across sizes
+              <Clock
+                size={inputIconPx}
+                className="block shrink-0"
+                aria-hidden="true"
+              />
+            }
             suppressHydrationWarning
             inputSize={inputVisualSize}
             variant={variant}

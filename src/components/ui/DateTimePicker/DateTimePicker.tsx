@@ -16,8 +16,6 @@ import Popover from '../Popover/Popover';
 
 import { DEFAULT_MONTHS, DEFAULT_DAYS, ROWS_X_COLS } from './constants';
 import type { DateAdapter, DateTimeRange } from '../../../lib/date/types';
-
-// zero-dependency adapter by default
 import { vanillaAdapter } from '../../../lib/date';
 
 export interface DateTimePickerProps {
@@ -73,7 +71,7 @@ const STABLE_EPOCH = new Date(Date.UTC(2000, 0, 1, 0, 0, 0)); // SSR-safe sentin
 const mapToControlSize = (s: NonNullable<DateTimePickerProps['inputSize']>) =>
   s === 'xs' ? 'sm' : s === 'xl' ? 'lg' : s;
 
-/** If your Input supports only 'sm'|'md'|'lg', we map the same way. */
+/** If your Input supports only 'sm'|'md'|'lg', map the same way. */
 const mapToInputSize = mapToControlSize;
 
 /** Map DateTimePicker variant → Select's supported variants */
@@ -86,6 +84,10 @@ const mapToSelectVariant = (
     : v === 'inset'
     ? 'filled'
     : (v as SelectVariant);
+
+/** Lucide numeric pixels for 'sm' | 'md' | 'lg' */
+const iconPxFor = (s: 'sm' | 'md' | 'lg') =>
+  s === 'sm' ? 16 : s === 'md' ? 20 : 24;
 
 const getInitialTimeFromDate = (d: Date | undefined, tf: '12' | '24') => {
   const hours = d ? d.getHours() : 12;
@@ -362,6 +364,11 @@ const DateTimePicker = ({
     else setViewDate(dateAdapter.addYears(viewDate, 10));
   };
 
+  // ---------- icon sizing (mapped 'xs|sm|md|lg|xl' → 'sm|md|lg') ----------
+  const inputVisualSize = mapToInputSize(inputSize);
+  const inputIconPx = iconPxFor(inputVisualSize); // Calendar icon in the input
+  const controlIconPx = inputIconPx; // Chevron + Clock icons in popover
+
   // calendar
   const renderCalendar = () => {
     const year = dateAdapter.getYear(viewDate);
@@ -439,7 +446,7 @@ const DateTimePicker = ({
       const end = isEnd(date);
       const disabledDay = isDateDisabled(date);
 
-      const lockHover = disabledDay || selected || inRange || start || end; // no hover if disabled/selected/range edges
+      const lockHover = disabledDay || selected || inRange || start || end;
 
       const label = mounted ? dateAdapter.format(date, 'PPPP') : '';
 
@@ -561,7 +568,8 @@ const DateTimePicker = ({
         >
           <div className="flex items-center gap-2 text-sm font-medium">
             <Clock
-              className="h-4 w-4"
+              size={controlIconPx}
+              className="block shrink-0"
               aria-hidden="true"
             />
             Time
@@ -667,7 +675,8 @@ const DateTimePicker = ({
         aria-label="Previous"
       >
         <ChevronLeft
-          className="h-4 w-4"
+          size={controlIconPx}
+          className="block shrink-0"
           aria-hidden="true"
         />
       </Button>
@@ -698,7 +707,8 @@ const DateTimePicker = ({
         aria-label="Next"
       >
         <ChevronRight
-          className="h-4 w-4"
+          size={controlIconPx}
+          className="block shrink-0"
           aria-hidden="true"
         />
       </Button>
@@ -720,26 +730,16 @@ const DateTimePicker = ({
     </div>
   );
 
-  // map extended input sizes for the text field
-  const inputVisualSize = mapToInputSize(inputSize);
-
   // When using floating/inset in your Input, avoid duplicating the visible label
   const usingInternalLabel = variant === 'floating' || variant === 'inset';
   const externalLabel = label && !usingInternalLabel ? label : undefined;
 
   // For floating/inset variants, the label lives inside the input.
-  // Use the provided `label` if present; otherwise fall back to the placeholder or a sensible default.
   const inputInternalLabel = usingInternalLabel
     ? label ?? placeholder ?? 'Select date and time'
     : undefined;
 
-  /**
-   * IMPORTANT:
-   * Floating/Insett label CSS relies on :placeholder-shown.
-   * That selector only works if there **is** a placeholder.
-   * Use a single space so we don't render visible placeholder text,
-   * but still trigger the CSS.
-   */
+  // Keep :placeholder-shown working for floating/inset
   const inputPlaceholder = usingInternalLabel ? ' ' : placeholder ?? '';
 
   return (
@@ -786,7 +786,13 @@ const DateTimePicker = ({
                 : undefined
             }
             aria-describedby={error ? descrId : undefined}
-            endIcon={<CalendarIcon className="h-5 w-5" />}
+            endIcon={
+              <CalendarIcon
+                size={inputIconPx}
+                className="block shrink-0"
+                aria-hidden="true"
+              />
+            }
             suppressHydrationWarning
             inputSize={inputVisualSize}
             variant={variant}

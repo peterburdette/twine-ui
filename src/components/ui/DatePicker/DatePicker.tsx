@@ -81,6 +81,10 @@ const formatYearOnly = (d: Date) => String(d.getFullYear());
 const mapToInputSize = (s: NonNullable<DatePickerProps['inputSize']>) =>
   s === 'xs' ? 'sm' : s === 'xl' ? 'lg' : s;
 
+/** Lucide numeric pixels for 'sm' | 'md' | 'lg' */
+const iconPxFor = (s: 'sm' | 'md' | 'lg') =>
+  s === 'sm' ? 16 : s === 'md' ? 20 : 24;
+
 const DatePicker: React.FC<DatePickerProps> = ({
   value,
   onChange,
@@ -300,6 +304,11 @@ const DatePicker: React.FC<DatePickerProps> = ({
     else setViewDate(dateAdapter.addYears(viewDate, 10));
   };
 
+  // ---------- sizing for icons (use mapped 'sm'|'md'|'lg') ----------
+  const inputVisualSize = mapToInputSize(inputSize);
+  const inputIconPx = iconPxFor(inputVisualSize); // Calendar icon in the input
+  const controlIconPx = inputIconPx; // Chevron icons in the header
+
   // ---- calendar body ----
   const renderCalendar = () => {
     const year = dateAdapter.getYear(viewDate);
@@ -489,7 +498,8 @@ const DatePicker: React.FC<DatePickerProps> = ({
         aria-label="Previous"
       >
         <ChevronLeft
-          className="h-4 w-4"
+          size={controlIconPx}
+          className="block shrink-0"
           aria-hidden="true"
         />
       </Button>
@@ -521,7 +531,8 @@ const DatePicker: React.FC<DatePickerProps> = ({
         aria-label="Next"
       >
         <ChevronRight
-          className="h-4 w-4"
+          size={controlIconPx}
+          className="block shrink-0"
           aria-hidden="true"
         />
       </Button>
@@ -541,9 +552,6 @@ const DatePicker: React.FC<DatePickerProps> = ({
       {renderQuick()}
     </div>
   );
-
-  // map extended sizes to your Input's supported sizes
-  const inputVisualSize = mapToInputSize(inputSize);
 
   // internal vs external label (for floating/inset)
   const usingInternalLabel = variant === 'floating' || variant === 'inset';
@@ -601,7 +609,13 @@ const DatePicker: React.FC<DatePickerProps> = ({
                 : undefined
             }
             aria-describedby={error ? descrId : undefined}
-            endIcon={<CalendarIcon className="h-5 w-5" />}
+            endIcon={
+              <CalendarIcon
+                size={inputIconPx}
+                className="block shrink-0"
+                aria-hidden="true"
+              />
+            }
             suppressHydrationWarning
             inputSize={inputVisualSize}
             variant={variant}
