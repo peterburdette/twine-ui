@@ -794,6 +794,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
       });
     }
   }, [showExportPopover]);
+
   useEffect(() => {
     if (showColumnPopover && columnButtonRef.current) {
       const rect = columnButtonRef.current.getBoundingClientRect();
@@ -804,7 +805,23 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     }
   }, [showColumnPopover]);
 
-  // Close export/columns on scroll (keep filter stable)
+  // Close filters/export/columns on scroll (keep filter stable)
+  useEffect(() => {
+    if (!showFilterPopover) return;
+    const handleScroll = (event: Event) => {
+      if (
+        filterPopoverRef.current &&
+        filterPopoverRef.current.contains(event.target as Node)
+      ) {
+        return;
+      }
+      setShowFilterPopover(false);
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, [showFilterPopover]);
+
   useEffect(() => {
     if (!showExportPopover) return;
     const handleScroll = (event: Event) => {
@@ -818,6 +835,7 @@ const DataGrid = forwardRef<GridApiRef, DataGridProps>((props, ref) => {
     window.addEventListener('scroll', handleScroll, true);
     return () => window.removeEventListener('scroll', handleScroll, true);
   }, [showExportPopover]);
+
   useEffect(() => {
     if (!showColumnPopover) return;
     const handleScroll = (event: Event) => {
