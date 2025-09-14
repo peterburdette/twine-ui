@@ -1,5 +1,5 @@
 import type React from 'react';
-import { forwardRef } from 'react';
+import { forwardRef, isValidElement, cloneElement } from 'react';
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -14,14 +14,59 @@ export interface ButtonProps
     | 'warning'
     | 'info'
     | 'unstyled';
-  size?: 'sm' | 'md' | 'lg' | 'icon';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'icon';
   fullWidth?: boolean;
   loading?: boolean;
   startIcon?: React.ReactNode;
   endIcon?: React.ReactNode;
   showFocusRing?: boolean;
   asChild?: boolean;
+
+  /** Corner radius — Tailwind tokens or a custom CSS length (e.g., 10, '12px', '1rem', '50%') */
+  radius?:
+    | 'none'
+    | 'sm'
+    | 'md'
+    | 'lg'
+    | 'xl'
+    | '2xl'
+    | 'full'
+    | number
+    | string;
 }
+
+/** Icon pixels per size (keeps SVGs crisp and vertically centered) */
+const ICON_PX = {
+  xs: 12,
+  sm: 16,
+  md: 20,
+  lg: 24,
+  xl: 28,
+  icon: 20,
+} as const;
+
+/** Map radius tokens → Tailwind classes (custom values handled via inline style) */
+const radiusClassFor = (r: ButtonProps['radius']) => {
+  const map: Record<string, string> = {
+    none: 'rounded-none',
+    sm: 'rounded-sm',
+    md: 'rounded-md',
+    lg: 'rounded-lg',
+    xl: 'rounded-xl',
+    '2xl': 'rounded-2xl',
+    full: 'rounded-full',
+  };
+  if (typeof r === 'string' && r in map) return map[r];
+  return ''; // fallback to inline style or default below
+};
+
+const radiusStyleFor = (r: ButtonProps['radius']) => {
+  if (r == null) return undefined;
+  if (typeof r === 'number') return { borderRadius: `${r}px` };
+  const tokens = ['none', 'sm', 'md', 'lg', 'xl', '2xl', 'full'];
+  if (typeof r === 'string' && tokens.includes(r)) return undefined; // handled by class
+  return { borderRadius: r as string };
+};
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (
@@ -37,11 +82,13 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       disabled,
       children,
       type = 'button',
+      radius = 'md',
+      style: styleProp,
       ...props
     },
     ref
   ) => {
-    const baseClasses = `inline-flex items-center justify-center font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-default ${
+    const baseClasses = `inline-flex items-center justify-center font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-default ${
       showFocusRing
         ? 'focus:outline-none focus:ring-2 focus:ring-offset-2'
         : 'focus:outline-none'
@@ -79,22 +126,55 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const sizeClasses = {
+      xs: 'px-2.5 py-1 text-xs h-7',
       sm: 'px-3 py-1.5 text-sm h-8',
       md: 'px-4 py-2 text-sm h-10',
       lg: 'px-6 py-3 text-base h-12',
+      xl: 'px-7 py-3.5 text-lg h-14',
       icon: 'p-2 h-10 w-10',
     };
 
     const widthClasses = fullWidth ? 'w-full' : '';
 
-    const buttonClasses = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${widthClasses} ${className}`;
+    // Radius class (tokens) + inline style (custom values)
+    const radiusClass = radiusClassFor(radius) || 'rounded-md';
+    const radiusStyle = radiusStyleFor(radius);
+
+    const buttonClasses = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${radiusClass} ${widthClasses} ${className}`;
 
     const isDisabled = disabled || loading;
+    const iconPx = ICON_PX[size];
+
+    const renderIcon = (node: React.ReactNode) => {
+      if (!node) return null;
+      if (isValidElement(node)) {
+        const existing = (node.props as any).className || '';
+        return cloneElement(node as React.ReactElement, {
+          size: iconPx, // lucide-react numeric size prop
+          className: `${existing ? existing + ' ' : ''}shrink-0`,
+          'aria-hidden': true,
+        });
+      }
+      // Non-lucide node fallback
+      return (
+        <span
+          aria-hidden="true"
+          className="inline-flex items-center justify-center shrink-0"
+          style={{ width: iconPx, height: iconPx }}
+        >
+          {node}
+        </span>
+      );
+    };
+
+    const showStartGap = !!children;
+    const showEndGap = !!children;
 
     return (
       <button
         ref={ref}
         className={buttonClasses}
+        style={{ ...styleProp, ...(radiusStyle ?? {}) }}
         disabled={isDisabled}
         aria-disabled={isDisabled || undefined}
         aria-busy={loading || undefined}
@@ -103,9 +183,8 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       >
         {loading && (
           <svg
-            className={`animate-spin h-4 w-4 ${
-              children || startIcon || endIcon ? 'mr-2' : ''
-            }`}
+            className={`${children ? 'mr-2' : ''} animate-spin`}
+            style={{ width: iconPx, height: iconPx }}
             fill="none"
             viewBox="0 0 24 24"
             aria-hidden="true"
@@ -126,21 +205,24 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             />
           </svg>
         )}
+
         {!loading && startIcon && (
           <span
+            className={showStartGap ? 'mr-2' : ''}
             aria-hidden="true"
-            className={`${children ? 'mr-2' : ''}`}
           >
-            {startIcon}
+            {renderIcon(startIcon)}
           </span>
         )}
+
         {children}
+
         {!loading && endIcon && (
           <span
+            className={showEndGap ? 'ml-2' : ''}
             aria-hidden="true"
-            className={`${children ? 'ml-2' : ''}`}
           >
-            {endIcon}
+            {renderIcon(endIcon)}
           </span>
         )}
       </button>
