@@ -16,9 +16,15 @@ import { DEFAULT_MONTHS, DEFAULT_DAYS, ROWS_X_COLS } from './constants';
 import { DateAdapter } from '../../../lib/date/types';
 import { vanillaAdapter } from '../../../lib/date';
 
+export interface DateRange {
+  start?: Date;
+  end?: Date;
+}
+
 export interface DatePickerProps {
-  value?: Date;
-  onChange?: (date: Date | undefined) => void;
+  /** Unified value shape */
+  value?: DateRange;
+  onChange?: (range: DateRange) => void;
 
   placeholder?: string;
   disabled?: boolean;
@@ -57,9 +63,16 @@ export interface DatePickerProps {
 
   /** Prevents SSR/CSR mismatch when no value is provided and you rely on "now". */
   deferInitialRender?: boolean;
+
+  /** Single-field range selection (e.g., “Jan 02, 2025 – Jan 12, 2025”). */
+  enableRange?: boolean;
+
+  /** Dual-input range selection (Start / End). Takes precedence visually if both are true. */
+  enableMultiInputRange?: boolean;
 }
 
-const STABLE_EPOCH = new Date(Date.UTC(2000, 0, 1, 0, 0, 0)); // SSR-safe sentinel
+/** Midday UTC avoids TZ rollovers to the prior day/year during SSR */
+const STABLE_EPOCH = new Date(Date.UTC(2000, 0, 1, 12, 0, 0));
 
 // Force month/year without time regardless of adapter behavior
 const formatMonthYear = (d: Date) => {
@@ -69,12 +82,10 @@ const formatMonthYear = (d: Date) => {
       year: 'numeric',
     }).format(d);
   } catch {
-    // Safe fallback
     const month = d.toLocaleString('en-US', { month: 'long' });
     return `${month} ${d.getFullYear()}`;
   }
 };
-
 const formatYearOnly = (d: Date) => String(d.getFullYear());
 
 /** Map extended input sizes → nearest supported input size ('sm'|'md'|'lg') */
@@ -84,6 +95,23 @@ const mapToInputSize = (s: NonNullable<DatePickerProps['inputSize']>) =>
 /** Lucide numeric pixels for 'sm' | 'md' | 'lg' */
 const iconPxFor = (s: 'sm' | 'md' | 'lg') =>
   s === 'sm' ? 16 : s === 'md' ? 20 : 24;
+
+const formatDateOnlySafe = (adapter: DateAdapter, fmt: string, d?: Date) => {
+  if (!d || !adapter.isValid(d)) return '';
+  const out = adapter.format(d, fmt);
+  if (/[0-9]:[0-9]|AM|PM|GMT|T\d{2}:/.test(out)) {
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+      }).format(d);
+    } catch {
+      return d.toDateString();
+    }
+  }
+  return out;
+};
 
 const DatePicker: React.FC<DatePickerProps> = ({
   value,
@@ -116,7 +144,14 @@ const DatePicker: React.FC<DatePickerProps> = ({
   readOnly = false,
   ariaLabel,
   deferInitialRender = true,
+
+  enableRange = false,
+  enableMultiInputRange = false,
 }) => {
+  // Modes
+  const rangeMode = enableRange || enableMultiInputRange;
+  const multiInputMode = enableMultiInputRange;
+
   // --- SSR hydration guard (avoid formatting "now" on the server) ---
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
@@ -126,88 +161,121 @@ const DatePicker: React.FC<DatePickerProps> = ({
   const descrId = React.useId();
   const gridId = React.useId();
 
+  // Treat an empty object like “no selection”
+  const hasAnySelection =
+    !!(value?.start && dateAdapter.isValid(value.start)) ||
+    !!(value?.end && dateAdapter.isValid(value.end));
+
   // popover state (controlled/uncontrolled)
   const [internalOpen, setInternalOpen] = React.useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = (o: boolean) =>
     onOpenChange ? onOpenChange(o) : setInternalOpen(o);
 
-  // view date (month being displayed)
+  // View date (month shown)
   const initialViewBase =
-    value && dateAdapter.isValid(value)
-      ? value
+    value?.start && dateAdapter.isValid(value.start)
+      ? value.start
+      : value?.end && dateAdapter.isValid(value.end)
+      ? value.end
       : deferInitialRender
       ? STABLE_EPOCH
       : dateAdapter.now();
 
   const [viewDate, setViewDate] = React.useState<Date>(() => initialViewBase);
 
-  // align to now after mount, if deferring
+  // align to now after mount if there's no selection
   React.useEffect(() => {
     if (!mounted) return;
-    if (!value && deferInitialRender) {
-      setViewDate(dateAdapter.now());
+    if (!hasAnySelection && deferInitialRender) {
+      const now = dateAdapter.now();
+      setViewDate(now);
+      setActiveDay(now);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted]);
+  }, [mounted, hasAnySelection, deferInitialRender, dateAdapter]);
 
   // ---- DATE-ONLY formatter (never show time in input) ----
-  const formatDateOnly = (d?: Date) => {
-    if (!d || !dateAdapter.isValid(d)) return '';
-    const out = dateAdapter.format(d, dateFormat);
-    // If adapter output accidentally includes time, fallback to a safe date-only format
-    if (/[0-9]:[0-9]|AM|PM|GMT|T\d{2}:/.test(out)) {
-      try {
-        return new Intl.DateTimeFormat(undefined, {
-          year: 'numeric',
-          month: 'short',
-          day: '2-digit',
-        }).format(d);
-      } catch {
-        return d.toDateString();
-      }
-    }
-    return out;
-  };
+  const formatDateOnly = (d?: Date) =>
+    formatDateOnlySafe(dateAdapter, dateFormat, d);
 
-  // formatted input value (SSR-safe)
-  const [inputValue, setInputValue] = React.useState<string>(() => {
-    if (!deferInitialRender) {
-      return formatDateOnly(value);
-    }
-    return '';
-  });
-
-  React.useEffect(() => {
-    if (!mounted && deferInitialRender) return;
-    if (value && dateAdapter.isValid(value)) {
-      setInputValue(formatDateOnly(value)); // ensure date-only text
-      setViewDate(value);
-    } else {
-      setInputValue('');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted, value, dateFormat]);
+  // formatted input values (SSR-safe)
+  const [singleFieldText, setSingleFieldText] = React.useState<string>('');
+  const [startInputText, setStartInputText] = React.useState<string>('');
+  const [endInputText, setEndInputText] = React.useState<string>('');
 
   // view mode: day/month/year
   const [view, setView] = React.useState<'day' | 'month' | 'year'>('day');
 
   // keyboard focus day
-  const [activeDay, setActiveDay] = React.useState<Date>(() =>
-    value && dateAdapter.isValid(value) ? value : initialViewBase
-  );
+  const [activeDay, setActiveDay] = React.useState<Date>(() => {
+    const base = value?.start ?? value?.end ?? initialViewBase;
+    return base;
+  });
 
-  // ---- parsing free-typed input ----
-  const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setInputValue(newValue);
-    try {
-      const parsed = dateAdapter.parse(newValue, dateFormat, dateAdapter.now());
-      if (dateAdapter.isValid(parsed))
-        onChange?.(dateAdapter.startOfDay(parsed)); // normalize to date-only
-    } catch {
-      /* ignore */
+  // Range interactions
+  const [selectingStart, setSelectingStart] = React.useState(true);
+  const [hoverDate, setHoverDate] = React.useState<Date | undefined>(undefined);
+
+  // Sync displayed text from value
+  React.useEffect(() => {
+    if (!mounted && deferInitialRender) return;
+
+    const start = value?.start;
+    const end = value?.end;
+
+    if (!rangeMode) {
+      // single-date UI → show start only
+      setSingleFieldText(start ? formatDateOnly(start) : '');
+    } else if (!multiInputMode) {
+      // single-field range
+      if (start && end)
+        setSingleFieldText(`${formatDateOnly(start)} – ${formatDateOnly(end)}`);
+      else if (start) setSingleFieldText(`${formatDateOnly(start)} – …`);
+      else if (end) setSingleFieldText(`… – ${formatDateOnly(end)}`);
+      else setSingleFieldText('');
+    } else {
+      // dual inputs
+      setStartInputText(start ? formatDateOnly(start) : '');
+      setEndInputText(end ? formatDateOnly(end) : '');
     }
+
+    const base = start ?? end;
+    if (base && dateAdapter.isValid(base)) {
+      setViewDate(base);
+      setActiveDay(base);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, value, dateFormat, rangeMode, multiInputMode]);
+
+  // ---- parsing free-typed input (single-date OR multi-input range) ----
+  const parseFreeText = (text: string) => {
+    try {
+      const parsed = dateAdapter.parse(text, dateFormat, dateAdapter.now());
+      return dateAdapter.isValid(parsed)
+        ? dateAdapter.startOfDay(parsed)
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  const onSingleFieldInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const text = e.target.value;
+    setSingleFieldText(text);
+    const parsed = parseFreeText(text);
+    onChange?.({ start: parsed, end: rangeMode ? value?.end : undefined });
+  };
+
+  const onStartInputChange = (text: string) => {
+    setStartInputText(text);
+    const parsed = parseFreeText(text);
+    onChange?.({ start: parsed, end: value?.end });
+  };
+
+  const onEndInputChange = (text: string) => {
+    setEndInputText(text);
+    const parsed = parseFreeText(text);
+    onChange?.({ start: value?.start, end: parsed });
   };
 
   // ---- predicates ----
@@ -216,14 +284,50 @@ const DatePicker: React.FC<DatePickerProps> = ({
       return true;
     if (maxDate && dateAdapter.isAfter(date, dateAdapter.endOfDay(maxDate)))
       return true;
-    return disabledDates.some((d) => dateAdapter.isSameDay(date, d));
+    return (disabledDates || []).some((d) => dateAdapter.isSameDay(date, d));
   };
   const isToday = (date: Date) =>
     dateAdapter.isSameDay(date, dateAdapter.now());
 
+  const inRange = (d: Date, r?: DateRange) => {
+    if (!r?.start || !r?.end) return false;
+    const s = dateAdapter.startOfDay(r.start);
+    const e = dateAdapter.endOfDay(r.end);
+    return !dateAdapter.isBefore(d, s) && !dateAdapter.isAfter(d, e);
+  };
+
+  const inHoverRange = (d: Date, r?: DateRange, hover?: Date) => {
+    if (!r?.start || !hover || selectingStart) return false;
+    const start = dateAdapter.isBefore(hover, r.start) ? hover : r.start;
+    const end = dateAdapter.isBefore(hover, r.start) ? r.start : hover;
+    const s = dateAdapter.startOfDay(start);
+    const e = dateAdapter.endOfDay(end);
+    return !dateAdapter.isBefore(d, s) && !dateAdapter.isAfter(d, e);
+  };
+
   // ---- select a day ----
   const handleDateSelect = (date: Date) => {
-    onChange?.(dateAdapter.startOfDay(date)); // ensure date-only
+    const d = dateAdapter.startOfDay(date);
+
+    if (!rangeMode) {
+      onChange?.({ start: d, end: undefined });
+      setOpen(false);
+      return;
+    }
+
+    const current = value ?? {};
+    if (selectingStart || !current.start) {
+      onChange?.({ start: d, end: current.end });
+      setSelectingStart(false);
+      return;
+    }
+
+    // selecting end
+    let start = current.start;
+    let end = d;
+    if (dateAdapter.isBefore(end, start)) [start, end] = [end, start];
+    onChange?.({ start, end });
+    setSelectingStart(true);
     setOpen(false);
   };
 
@@ -306,13 +410,14 @@ const DatePicker: React.FC<DatePickerProps> = ({
 
   // ---------- sizing for icons (use mapped 'sm'|'md'|'lg') ----------
   const inputVisualSize = mapToInputSize(inputSize);
-  const inputIconPx = iconPxFor(inputVisualSize); // Calendar icon in the input
-  const controlIconPx = inputIconPx; // Chevron icons in the header
+  const inputIconPx = iconPxFor(inputVisualSize);
+  const controlIconPx = inputIconPx;
 
   // ---- calendar body ----
   const renderCalendar = () => {
     const year = dateAdapter.getYear(viewDate);
     const month = dateAdapter.getMonth(viewDate);
+    const r = value ?? {};
 
     if (view === 'year') {
       const startYear = Math.floor(year / 10) * 10;
@@ -321,7 +426,7 @@ const DatePicker: React.FC<DatePickerProps> = ({
         <div
           className="grid grid-cols-3 gap-2 p-2"
           role="listbox"
-          aria-label="Select year"
+          aria-label={rangeMode ? 'Select year for range' : 'Select year'}
         >
           {years.map((y) => (
             <Button
@@ -346,7 +451,7 @@ const DatePicker: React.FC<DatePickerProps> = ({
         <div
           className="grid grid-cols-3 gap-2 p-2"
           role="listbox"
-          aria-label="Select month"
+          aria-label={rangeMode ? 'Select month for range' : 'Select month'}
         >
           {localeMonthNames.map((name, i) => (
             <Button
@@ -377,13 +482,18 @@ const DatePicker: React.FC<DatePickerProps> = ({
       date.setDate(gridStart.getDate() + i);
 
       const inThisMonth = date.getMonth() === month;
-      const selected =
-        value &&
-        dateAdapter.isValid(value) &&
-        dateAdapter.isSameDay(date, value);
-      const disabledDay = isDateDisabled(date);
 
-      const lockHover = disabledDay || selected;
+      const isStart = !!r.start && dateAdapter.isSameDay(date, r.start);
+      const isEnd = !!r.end && dateAdapter.isSameDay(date, r.end);
+      const isSingleSelected =
+        !rangeMode && !!r.start && dateAdapter.isSameDay(date, r.start);
+
+      const disabledDay = isDateDisabled(date);
+      const lockHover = disabledDay || isSingleSelected || isStart || isEnd;
+
+      const inActiveRange = rangeMode && inRange(date, r);
+      const inPreviewRange = rangeMode && inHoverRange(date, r, hoverDate);
+
       const label = mounted ? dateAdapter.format(date, 'PPPP') : '';
 
       cells.push(
@@ -391,7 +501,7 @@ const DatePicker: React.FC<DatePickerProps> = ({
           key={date.toISOString()}
           type="button"
           role="gridcell"
-          aria-selected={!!selected}
+          aria-selected={isSingleSelected || isStart || isEnd || undefined}
           aria-current={isToday(date) ? 'date' : undefined}
           aria-disabled={disabledDay || undefined}
           tabIndex={
@@ -399,14 +509,16 @@ const DatePicker: React.FC<DatePickerProps> = ({
           }
           onFocus={() => !disabledDay && setActiveDay(date)}
           onClick={() => !disabledDay && handleDateSelect(date)}
+          onMouseEnter={() => rangeMode && setHoverDate(date)}
+          onMouseLeave={() => rangeMode && setHoverDate(undefined)}
           size="icon"
           variant={lockHover ? 'unstyled' : 'ghost'}
           className={cn(
             'h-8 w-8 p-0 rounded-md text-sm flex items-center justify-center',
             !inThisMonth && 'text-gray-400',
             disabledDay && 'cursor-default opacity-50',
-            selected && 'bg-blue-600 text-white',
-            !lockHover && 'hover:bg-gray-100'
+            (isSingleSelected || isStart || isEnd) && 'bg-blue-600 text-white',
+            !lockHover && (inActiveRange || inPreviewRange) && 'bg-blue-500/15'
           )}
         >
           <span
@@ -465,9 +577,10 @@ const DatePicker: React.FC<DatePickerProps> = ({
           size="sm"
           variant="secondary"
           onClick={() => {
-            const today = dateAdapter.now();
+            const today = dateAdapter.startOfDay(dateAdapter.now());
             setViewDate(today);
-            onChange?.(dateAdapter.startOfDay(today)); // date-only
+            if (!rangeMode) onChange?.({ start: today, end: undefined });
+            else onChange?.({ start: today, end: today });
           }}
         >
           Today
@@ -477,8 +590,10 @@ const DatePicker: React.FC<DatePickerProps> = ({
             size="sm"
             variant="ghost"
             onClick={() => {
-              onChange?.(undefined);
-              setInputValue('');
+              onChange?.({ start: undefined, end: undefined });
+              setSingleFieldText('');
+              setStartInputText('');
+              setEndInputText('');
             }}
           >
             Clear
@@ -523,7 +638,6 @@ const DatePicker: React.FC<DatePickerProps> = ({
           }`}
         {!mounted && '\u00A0'}
       </Button>
-
       <Button
         variant="ghost"
         size="sm"
@@ -549,6 +663,13 @@ const DatePicker: React.FC<DatePickerProps> = ({
     >
       {Header}
       {renderCalendar()}
+      <div className="p-2 border-t text-xs text-gray-600">
+        {rangeMode
+          ? selectingStart
+            ? 'Select start date'
+            : 'Select end date'
+          : 'Select a date'}
+      </div>
       {renderQuick()}
     </div>
   );
@@ -561,9 +682,115 @@ const DatePicker: React.FC<DatePickerProps> = ({
   // inject a single-space placeholder for floating/inset so :placeholder-shown works
   const shouldInjectSpacePlaceholder =
     usingInternalLabel &&
-    !inputValue &&
+    !singleFieldText &&
     (!placeholder || placeholder.length === 0);
   const effectivePlaceholder = shouldInjectSpacePlaceholder ? ' ' : placeholder;
+
+  // ----- trigger UI (single input vs dual inputs) -----
+  const triggerSingleInput = (
+    <div
+      role="combobox"
+      aria-expanded={open}
+      aria-controls={open ? gridId : undefined}
+      aria-haspopup="dialog"
+      className="relative"
+    >
+      <Input
+        id={inputId}
+        value={singleFieldText}
+        onChange={onSingleFieldInputChange}
+        placeholder={rangeMode ? 'Select date range' : effectivePlaceholder}
+        disabled={disabled}
+        readOnly={readOnly || (rangeMode && !multiInputMode)}
+        aria-invalid={!!error || undefined}
+        aria-required={required || undefined}
+        aria-label={
+          !externalLabel && !inputInternalLabel
+            ? ariaLabel ?? (rangeMode ? 'Date range input' : 'Date input')
+            : undefined
+        }
+        aria-describedby={error ? descrId : undefined}
+        endIcon={
+          <CalendarIcon
+            size={inputIconPx}
+            className="block shrink-0"
+            aria-hidden="true"
+          />
+        }
+        suppressHydrationWarning
+        inputSize={mapToInputSize(inputSize)}
+        variant={variant}
+        label={inputInternalLabel}
+        error={error}
+        required={required}
+      />
+    </div>
+  );
+
+  const triggerDualInputs = (
+    <div className="flex gap-2">
+      <div
+        className="relative flex-1"
+        role="combobox"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+      >
+        <Input
+          id={`${inputId}-start`}
+          value={startInputText}
+          onChange={(e) => onStartInputChange(e.target.value)}
+          placeholder="Start date"
+          disabled={disabled}
+          aria-invalid={!!error || undefined}
+          aria-describedby={error ? descrId : undefined}
+          endIcon={
+            <CalendarIcon
+              size={inputIconPx}
+              className="block shrink-0"
+              aria-hidden="true"
+            />
+          }
+          suppressHydrationWarning
+          inputSize={mapToInputSize(inputSize)}
+          variant={variant}
+          label={
+            inputInternalLabel ? `${inputInternalLabel} (start)` : undefined
+          }
+          error={error}
+          required={required}
+        />
+      </div>
+      <div
+        className="relative flex-1"
+        role="combobox"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+      >
+        <Input
+          id={`${inputId}-end`}
+          value={endInputText}
+          onChange={(e) => onEndInputChange(e.target.value)}
+          placeholder="End date"
+          disabled={disabled}
+          aria-invalid={!!error || undefined}
+          aria-describedby={error ? descrId : undefined}
+          endIcon={
+            <CalendarIcon
+              size={inputIconPx}
+              className="block shrink-0"
+              aria-hidden="true"
+            />
+          }
+          suppressHydrationWarning
+          inputSize={mapToInputSize(inputSize)}
+          variant={variant}
+          label={inputInternalLabel ? `${inputInternalLabel} (end)` : undefined}
+          error={error}
+          required={required}
+        />
+      </div>
+    </div>
+  );
 
   return (
     <div className={cn('space-y-2', className)}>
@@ -587,43 +814,7 @@ const DatePicker: React.FC<DatePickerProps> = ({
         placement="bottom"
         offset={8}
       >
-        <div
-          role="combobox"
-          aria-expanded={open}
-          aria-controls={open ? gridId : undefined}
-          aria-haspopup="dialog"
-          className="relative"
-        >
-          <Input
-            id={inputId}
-            value={inputValue}
-            onChange={onInputChange}
-            placeholder={effectivePlaceholder}
-            disabled={disabled}
-            readOnly={readOnly}
-            aria-invalid={!!error || undefined}
-            aria-required={required || undefined}
-            aria-label={
-              !externalLabel && !inputInternalLabel
-                ? ariaLabel ?? 'Date input'
-                : undefined
-            }
-            aria-describedby={error ? descrId : undefined}
-            endIcon={
-              <CalendarIcon
-                size={inputIconPx}
-                className="block shrink-0"
-                aria-hidden="true"
-              />
-            }
-            suppressHydrationWarning
-            inputSize={inputVisualSize}
-            variant={variant}
-            label={inputInternalLabel}
-            error={error}
-            required={required}
-          />
-        </div>
+        {multiInputMode ? triggerDualInputs : triggerSingleInput}
       </Popover>
 
       {error && (
